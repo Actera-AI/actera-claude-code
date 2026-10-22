@@ -82,15 +82,51 @@ export async function pair(origin = process.env.ACTERA_API_ORIGIN || DEFAULT_API
   throw new Error('The connection expired. Run /actera:connect again.')
 }
 
+const setupFailures = {
+  400: 'That is not an Actera setup code.',
+  404: 'Actera does not recognize that setup code.',
+  409: 'The agent for that setup code is no longer available. Get a new code from Actera.',
+  410: 'That setup code was already used or has expired. Get a new code from Actera.',
+  429: 'Too many setup attempts. Try again in a moment.',
+}
+
+// A setup code from Actera connects to the agent an administrator made it for,
+// so it needs no browser approval.
+export async function connectWithSetupCode(code, origin = process.env.ACTERA_API_ORIGIN || DEFAULT_API_ORIGIN, { capture } = {}) {
+  const baseUrl = apiOrigin(origin)
+  const existing = await loadConfig()
+  capture ??= existing?.baseUrl === baseUrl ? existing.capture : 'tool-inputs'
+  if (!['metadata', 'tool-inputs'].includes(capture)) throw new Error('Invalid capture mode')
+  const response = await fetch(`${baseUrl}/v1/agent-setup-codes/redeem`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: String(code).trim() }),
+    redirect: 'error',
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!response.ok) throw new Error(setupFailures[response.status] ?? `Actera setup returned HTTP ${response.status}`)
+  const { api_key: apiKey, agent_id: agentId } = await response.json()
+  if (typeof apiKey !== 'string' || typeof agentId !== 'string') throw new Error('Actera returned an invalid setup response')
+  const configured = await provisionBridge({ baseUrl, agentId, capture, apiKey })
+  return {
+    agentId, baseUrl, capture,
+    ...(configured.archivedEvents ? {
+      archivedEvents: configured.archivedEvents,
+      archivePath: configured.archivePath,
+    } : {}),
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2)
-  if (args.some((arg) => arg !== '--reconnect') || args.length > 1) {
-    process.stderr.write('Usage: pair.mjs [--reconnect]. The Actera API endpoint is bundled with the plugin.\n')
+  const setupCode = args[0] === '--setup-code' && args.length === 2 ? args[1] : undefined
+  if (setupCode === undefined && (args.some((arg) => arg !== '--reconnect') || args.length > 1)) {
+    process.stderr.write('Usage: pair.mjs [--reconnect | --setup-code <code>]. The Actera API endpoint is bundled with the plugin.\n')
     process.exitCode = 1
-  } else await pair(undefined, {
+  } else await (setupCode !== undefined ? connectWithSetupCode(setupCode) : pair(undefined, {
     reconnect: process.argv.includes('--reconnect'),
     onWaiting: ({ codeHint, browserUrl }) => process.stdout.write(`Confirm code ${codeHint} in the Actera browser page.\nIf it did not open, visit: ${browserUrl}\nWaiting for an administrator to approve the connection…\n`),
-  }).then(({ agentId, baseUrl, archivedEvents, archivePath }) => {
+  })).then(({ agentId, baseUrl, archivedEvents, archivePath }) => {
     process.stdout.write(`Actera is connected to agent ${agentId}.\n`)
     if (process.env.ACTERA_API_ORIGIN) process.stdout.write(`Using the ACTERA_API_ORIGIN override: ${baseUrl}\n`)
     if (archivedEvents) process.stdout.write(`Preserved ${archivedEvents} undelivered events from the previous connection in ${archivePath}.\n`)

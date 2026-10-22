@@ -31,6 +31,9 @@ directory; this repository is installed into Claude Code through its Git
 marketplace. A browser page opens for a workspace administrator to name a new
 agent or select an existing one. Confirm that the short code in Claude matches
 the page.
+With a setup code from the Actera Overview, run `/actera:connect <setup code>`
+instead. The code already names the agent, so no browser page opens. It works
+once and expires after 30 minutes.
 The plugin waits for approval and stores the resulting agent-bound machine key
 locally without displaying it in the conversation. Tool inputs are captured by default after local field-name redaction and scanning with the bundled Gitleaks engine. Prompt text and tool responses are not forwarded.
 The default Actera mode is **Monitoring**. Every tool attempt creates a decision,

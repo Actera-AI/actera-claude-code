@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
-import { pair } from '../../plugins/actera/bin/pair.mjs'
+import { connectWithSetupCode, pair } from '../../plugins/actera/bin/pair.mjs'
 import { loadConfig } from '../../plugins/actera/lib/bridge.mjs'
 
 const home = await mkdtemp(join(tmpdir(), 'actera-pair-test-'))
@@ -101,6 +101,48 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
     assert.equal(overridden.baseUrl, origin)
     assert.equal(starts, 3)
     assert.equal(JSON.parse(await readFile(join(home, 'config.json'), 'utf8')).baseUrl, origin)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('a setup code connects to the agent it was made for without a browser', async () => {
+  const apiKey = 'actera_' + 's'.repeat(43)
+  const codes = new Map([['ABCD-EFGH-JKMN-PQRS', 'fresh'], ['USED-USED-USED-USED', 'used']])
+  const server = createServer(async (request, response) => {
+    const chunks = []
+    for await (const chunk of request) chunks.push(chunk)
+    response.setHeader('content-type', 'application/json')
+    if (request.url === '/v1/agent-setup-codes/redeem' && request.method === 'POST') {
+      const code = JSON.parse(Buffer.concat(chunks).toString('utf8')).code
+      const state = codes.get(code)
+      if (state === 'fresh') {
+        codes.set(code, 'used')
+        response.end(JSON.stringify({ api_key: apiKey, agent_id: 'setup-agent', workspace_id: 'w', expires_at: 'x' }))
+      } else {
+        response.writeHead(state === 'used' ? 410 : 404)
+        response.end('{}')
+      }
+    } else if (request.url === '/v1/agents/setup-agent/readiness') {
+      assert.equal(request.headers.authorization, `Bearer ${apiKey}`)
+      response.end(JSON.stringify({ agent_id: 'setup-agent', status: 'DISCOVERED', ready: true, observation_ready: true }))
+    } else {
+      response.writeHead(404)
+      response.end('{}')
+    }
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`
+    await assert.rejects(connectWithSetupCode('USED-USED-USED-USED', origin), /already used or has expired/)
+    await assert.rejects(connectWithSetupCode('NOPE-NOPE-NOPE-NOPE', origin), /does not recognize/)
+    const result = await connectWithSetupCode(' ABCD-EFGH-JKMN-PQRS ', origin)
+    assert.deepEqual(result, { agentId: 'setup-agent', baseUrl: origin, capture: 'tool-inputs' })
+    const saved = JSON.parse(await readFile(join(home, 'config.json'), 'utf8'))
+    assert.equal(saved.apiKey, apiKey)
+    assert.equal(saved.agentId, 'setup-agent')
+    assert.equal(saved.baseUrl, origin)
+    await assert.rejects(connectWithSetupCode('ABCD-EFGH-JKMN-PQRS', origin), /already used/)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.2
+
+`/actera:connect <setup code>` connects with a setup code from the Actera
+Overview. The code names the agent, so no browser approval is needed. It works
+once and expires after 30 minutes.
+
 ## 0.0.1
 
 Initial alpha release of Actera for Claude Code: policy decisions for built-in
