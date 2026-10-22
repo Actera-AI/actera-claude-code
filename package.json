@@ -12,7 +12,7 @@
     "check:distribution": "node scripts/check-distribution.mjs && node scripts/check-plugin.mjs"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.292"
+    "@anthropic-ai/claude-agent-sdk": "0.3.303"
   },
   "engines": {
     "node": ">=22"
