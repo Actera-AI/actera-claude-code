@@ -38,7 +38,7 @@ async function post(url, body) {
   return { status: response.status, body: await response.json() }
 }
 
-export async function pair(origin = DEFAULT_API_ORIGIN, { capture, reconnect = false, open = openBrowser, maxWaitMs = 600_000, onWaiting = () => {} } = {}) {
+export async function pair(origin = process.env.ACTERA_API_ORIGIN || DEFAULT_API_ORIGIN, { capture, reconnect = false, open = openBrowser, maxWaitMs = 600_000, onWaiting = () => {} } = {}) {
   const baseUrl = apiOrigin(origin)
   const existing = await loadConfig()
   capture ??= existing?.baseUrl === baseUrl ? existing.capture : 'tool-inputs'
@@ -90,8 +90,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else await pair(undefined, {
     reconnect: process.argv.includes('--reconnect'),
     onWaiting: ({ codeHint, browserUrl }) => process.stdout.write(`Confirm code ${codeHint} in the Actera browser page.\nIf it did not open, visit: ${browserUrl}\nWaiting for an administrator to approve the connection…\n`),
-  }).then(({ agentId, archivedEvents, archivePath }) => {
+  }).then(({ agentId, baseUrl, archivedEvents, archivePath }) => {
     process.stdout.write(`Actera is connected to agent ${agentId}.\n`)
+    if (process.env.ACTERA_API_ORIGIN) process.stdout.write(`Using the ACTERA_API_ORIGIN override: ${baseUrl}\n`)
     if (archivedEvents) process.stdout.write(`Preserved ${archivedEvents} undelivered events from the previous connection in ${archivePath}.\n`)
   }).catch((error) => {
     process.stderr.write(`Actera connection: ${error.message}\n`)

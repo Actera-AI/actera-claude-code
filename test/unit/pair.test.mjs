@@ -49,20 +49,20 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
   try {
     const origin = `http://127.0.0.1:${server.address().port}`
     const fetch = globalThis.fetch
-    t.mock.method(globalThis, 'fetch', (url, options) => {
+    const mockedFetch = t.mock.method(globalThis, 'fetch', (url, options) => {
       const target = new URL(url)
-      assert.equal(target.origin, 'http://localhost:8080')
+      assert.equal(target.origin, 'https://app.actera.dev')
       return fetch(`${origin}${target.pathname}${target.search}`, options)
     })
     let display
     const result = await pair(undefined, { open: () => {}, onWaiting: (value) => { display = value } })
-    assert.deepEqual(result, { agentId: 'test-agent', baseUrl: 'http://localhost:8080', capture: 'tool-inputs' })
+    assert.deepEqual(result, { agentId: 'test-agent', baseUrl: 'https://app.actera.dev', capture: 'tool-inputs' })
     assert.equal(display.codeHint, 'aaaaaaaa')
     assert.equal(JSON.stringify(display).includes(apiKey), false)
     const saved = JSON.parse(await readFile(join(home, 'config.json'), 'utf8'))
     assert.equal(saved.apiKey, apiKey)
     assert.equal(saved.agentId, 'test-agent')
-    assert.equal(saved.baseUrl, 'http://localhost:8080')
+    assert.equal(saved.baseUrl, 'https://app.actera.dev')
     assert.equal(saved.mode, undefined)
     assert.equal(saved.onEvaluationError, undefined)
     await pair(undefined, { open: () => assert.fail('healthy connection reopened the browser') })
@@ -85,6 +85,22 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
     const persisted = JSON.parse(await readFile(join(home, 'config.json'), 'utf8'))
     assert.equal(persisted.mode, undefined)
     assert.equal(persisted.onEvaluationError, undefined)
+
+    // Contributors point pairing at another service with ACTERA_API_ORIGIN. It is
+    // validated like any origin and recorded as the connection's baseUrl.
+    mockedFetch.mock.restore()
+    const oldOrigin = process.env.ACTERA_API_ORIGIN
+    t.after(() => {
+      if (oldOrigin === undefined) delete process.env.ACTERA_API_ORIGIN
+      else process.env.ACTERA_API_ORIGIN = oldOrigin
+    })
+    process.env.ACTERA_API_ORIGIN = 'http://example.com'
+    await assert.rejects(pair(undefined, { open: () => {} }), /HTTPS/)
+    process.env.ACTERA_API_ORIGIN = origin
+    const overridden = await pair(undefined, { open: () => {} })
+    assert.equal(overridden.baseUrl, origin)
+    assert.equal(starts, 3)
+    assert.equal(JSON.parse(await readFile(join(home, 'config.json'), 'utf8')).baseUrl, origin)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

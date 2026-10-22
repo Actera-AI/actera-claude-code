@@ -36,12 +36,15 @@ publish a new version for corrections. Follow the
 customer data or credentials to make an example work. Participation is governed
 by the [code of conduct](CODE_OF_CONDUCT.md).
 
-The bundled API endpoint is `http://localhost:8080`, defined in
-`plugins/actera/lib/defaults.mjs`. Browser pairing uses it without a URL
-argument. Update that constant when the hosted service is ready.
-The developer-only `actera-hook.mjs setup` command also defaults to it; pass
-`--base-url ORIGIN` to target another test API. Users connect through browser pairing.
-Keep the test agent, machine key, and bridge state outside the repository.
+The plugin connects to the hosted service defined in
+`plugins/actera/lib/defaults.mjs`; users never see or choose an endpoint. For
+local development, set `ACTERA_API_ORIGIN` (HTTPS, or HTTP on loopback) in the
+shell that launches Claude Code or the test harness, then run `/actera:connect`.
+The override applies only at pairing time and is stored as that connection's
+`baseUrl`, so switching services means reconnecting. The connect output names
+the override when one is active. The developer-only `actera-hook.mjs setup`
+command honors the same variable and `--base-url ORIGIN`. Keep the test agent,
+machine key, and bridge state outside the repository.
 
 ## Bundled scanner
 

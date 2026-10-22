@@ -24,8 +24,8 @@ claude plugin install actera@actera --scope user
 
 In Claude Code (the terminal or a local Code session in Claude Desktop), run
 `/reload-plugins` or start a new session, then run `/actera:connect`.
-The plugin connects to `http://localhost:8080` automatically; start the local
-Actera service before connecting. No API URL or machine key is needed.
+The plugin connects to the Actera service automatically. No API URL or machine
+key is needed.
 The Chat/Cowork plugin search is a separate
 directory; this repository is installed into Claude Code through its Git
 marketplace. A browser page opens for a workspace administrator to name a new

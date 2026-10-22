@@ -88,7 +88,7 @@ async function main() {
       ? (await readHookInputText(process.stdin)).trim()
       : await secretFromTerminal()
     const result = await provisionBridge({
-      baseUrl: option('base-url'),
+      baseUrl: option('base-url') ?? process.env.ACTERA_API_ORIGIN,
       agentId: option('agent-id'),
       capture: option('capture'),
       apiKey,
