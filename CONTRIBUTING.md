@@ -16,8 +16,11 @@ claude plugin validate .tools/mod-tests --strict
 
 Let CI pass before merging. `test/unit` contains offline tests; `test/mods`
 contains native mod tests. The mod runner stages a disposable plugin under
-`.tools/mod-tests` because Claude discovers tests inside a plugin. Never put
-contributor tests or generated host types in the installed payload.
+`.tools/mod-tests` because Claude discovers tests inside a plugin. Scope a
+`tool.check` mock to the tool under test: the review prompt is an
+AskUserQuestion tool call that runs the permission check as well, and an
+unscoped deny swallows it. Never put contributor tests or generated host types
+in the installed payload.
 
 Use synthetic fixtures. Do not commit credentials, customer data, captured
 sessions, local configuration, or build caches. The distribution check reviews
