@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.tools/
+.dev/
+.env
+.env.*
+coverage/
+*.tgz
+*.log
+*.exe
+*.test
+*.tsbuildinfo
+**/.claude-plugin/types/
+
+test-results/
+playwright-report/
+
+# Claude generates these when loading or validating a mod.
+plugins/actera/tsconfig.json

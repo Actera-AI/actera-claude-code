@@ -1,0 +1,14 @@
+{
+  "name": "actera",
+  "description": "Actera integrations for Claude Code",
+  "owner": {
+    "name": "Actera"
+  },
+  "plugins": [
+    {
+      "name": "actera",
+      "source": "./plugins/actera",
+      "description": "Monitor and enforce Claude Code tool decisions in Actera"
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+name: ci
+"on":
+  push:
+    branches:
+      - main
+  pull_request: null
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  plugin:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        node:
+          - 24
+        include:
+          - os: ubuntu-latest
+            node: 22
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install pinned test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        timeout-minutes: 5
+      - run: node scripts/check-contract.mjs
+        timeout-minutes: 5
+      - run: node scripts/generate-outcomes.mjs --check
+        timeout-minutes: 5
+      - name: Verify bundled scanners
+        run: node scripts/bundle-gitleaks.mjs
+        timeout-minutes: 5
+      - name: Install supported Claude Code
+        run: npm install --prefix .tools/claude-ci --no-audit --no-fund --no-save @anthropic-ai/claude-code@2.1.295
+        timeout-minutes: 5
+      - name: Bridge failure behavior and policy contract tests
+        run: npm test
+        shell: bash
+        timeout-minutes: 5
+      - name: Validate marketplace and plugin
+        run: |
+          npm exec --prefix .tools/claude-ci -- claude plugin validate . --strict
+          node scripts/stage-mod-tests.mjs
+          npm exec --prefix .tools/claude-ci -- claude plugin validate .tools/mod-tests --strict
+          npm exec --prefix .tools/claude-ci -- claude plugin test .tools/mod-tests
+        shell: bash
+        timeout-minutes: 5
+      - name: Clean local marketplace installation
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-local-install
+        run: |
+          npm exec --prefix .tools/claude-ci -- claude plugin marketplace add ./
+          npm exec --prefix .tools/claude-ci -- claude plugin install actera@actera --scope user
+          npm exec --prefix .tools/claude-ci -- claude plugin list
+          node scripts/check-plugin.mjs --installed
+        shell: bash
+        timeout-minutes: 5
+    needs:
+      - distribution
+    if: ${{ needs.distribution.outputs.code == 'true' }}
+    timeout-minutes: 15
+  scanner-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.27.0
+          cache-dependency-path: scanner/go.sum
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: go vet ./...
+        working-directory: scanner
+        timeout-minutes: 5
+      - run: node scripts/scanner-notices.mjs --check
+        timeout-minutes: 5
+      - name: Verify reproducible helper binaries
+        run: node scripts/bundle-gitleaks.mjs --verify-build
+        timeout-minutes: 10
+    needs:
+      - distribution
+    if: ${{ needs.distribution.outputs.code == 'true' }}
+    timeout-minutes: 15
+  remote-install:
+    if: ${{ needs.distribution.outputs.code == 'true' && github.event_name != 'pull_request' }}
+    needs:
+      - distribution
+      - plugin
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLAUDE_CODE_PLUGIN_PREFER_HTTPS: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --prefix .tools/claude-ci --no-audit --no-fund --no-save @anthropic-ai/claude-code@2.1.295
+        timeout-minutes: 5
+      - name: Install from the GitHub repository
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-remote-install
+        run: |
+          gh auth setup-git
+          npm exec --prefix .tools/claude-ci -- claude plugin marketplace add "${GITHUB_REPOSITORY}#${GITHUB_REF_NAME}"
+          npm exec --prefix .tools/claude-ci -- claude plugin install actera@actera --scope user
+          npm exec --prefix .tools/claude-ci -- claude plugin details actera
+          node scripts/check-plugin.mjs --installed
+        shell: bash
+        timeout-minutes: 5
+    timeout-minutes: 15
+  distribution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Test CI selection and release safety
+        run: node --test .github/scripts/*.test.mjs
+        timeout-minutes: 2
+      - name: Select checks from the complete change range
+        id: changes
+        run: node .github/scripts/changes.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        timeout-minutes: 5
+      - run: npm run check:distribution
+        timeout-minutes: 5
+      - name: Check publication history and regression cases
+        run: node scripts/check-publication.mjs --history && node --test scripts/publication.test.mjs
+        timeout-minutes: 5
+      - run: bash scripts/scan-secrets.sh
+        timeout-minutes: 5
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+      remote: ${{ steps.changes.outputs.code == 'true' && github.event_name != 'pull_request' }}
+    timeout-minutes: 15
+  ci-result:
+    if: ${{ always() }}
+    needs:
+      - distribution
+      - plugin
+      - scanner-source
+      - remote-install
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected check to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const needs = JSON.parse(process.env.NEEDS);
+          const plan = needs["distribution"].outputs;
+          const checks = {"distribution": "-", "plugin": "code", "scanner-source": "code", "remote-install": "remote"};
+          for (const [job, flag] of Object.entries(checks)) {
+            const required = flag === '-' || (flag.startsWith('!') ? plan[flag.slice(1)] !== 'true' : plan[flag] === 'true');
+            if (needs[job].result !== (required ? 'success' : 'skipped')) throw new Error(`${job}: ${needs[job].result}`);
+          }
+          NODE
+        timeout-minutes: 5
+  release-ready:
+    if:
+      ${{ needs.distribution.outputs.code == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      }}
+    needs:
+      - distribution
+      - ci-result
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo "Full CI passed for $GITHUB_SHA; releases may reuse this exact commit."
+        timeout-minutes: 5
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true

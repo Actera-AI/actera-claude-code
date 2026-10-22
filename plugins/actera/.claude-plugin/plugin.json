@@ -1,0 +1,36 @@
+{
+  "name": "actera",
+  "displayName": "Actera",
+  "version": "0.0.1",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Actera mode",
+      "description": "Monitoring records policy results without blocking. Enforcing blocks denied actions and holds calls that need approval.",
+      "options": ["Monitoring", "Enforcing"],
+      "default": "Monitoring"
+    },
+    "evaluation_failure": {
+      "type": "string",
+      "title": "When Actera cannot evaluate",
+      "description": "Applies only in Enforcing mode: choose what happens on service outages, timeouts, invalid responses or input-scanning failures. Explicit denials and required approvals remain enforced. Monitoring always continues.",
+      "options": ["Block tool calls (fail closed)", "Allow tool calls (fail open)"],
+      "default": "Block tool calls (fail closed)"
+    }
+  },
+  "author": {
+    "name": "Actera"
+  },
+  "description": "Monitor and enforce tool decisions with execution reports in Actera",
+  "homepage": "https://github.com/Actera-AI/actera-claude-code",
+  "repository": "https://github.com/Actera-AI/actera-claude-code",
+  "license": "Apache-2.0",
+  "documentationUrl": "https://github.com/Actera-AI/actera-claude-code#readme",
+  "supportUrl": "https://github.com/Actera-AI/actera-claude-code/issues",
+  "keywords": [
+    "actera",
+    "policy",
+    "approval",
+    "claude-code"
+  ]
+}
