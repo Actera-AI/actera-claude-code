@@ -25,7 +25,10 @@ credential lives in `reviewer.json` in the bridge state directory. Someone who
 can read that file or modify the plugin may misuse its delegated authority.
 
 **Allow once** approves the existing Decision and releases that call once.
-**Deny** rejects it. Skip or an unrecognized answer leaves it pending. Without
+**Deny** rejects it. A reviewer can also approve or reject on the Decision page
+in Actera while Claude's prompt is open. Choosing **I've approved it in Actera**,
+**Not now**, or closing the prompt checks the Decision first: an approval
+releases the held call once and a rejection denies it. Otherwise it stays pending. Without
 the mod, approve in Actera and retry the same tool and arguments in the same
 session within one hour. Another invocation needs its own decision.
 
