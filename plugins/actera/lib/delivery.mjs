@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createServer, request } from 'node:http'
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -9,6 +10,8 @@ import { deliverBatch, loadConfig, pendingCount, pruneLocalState } from './bridg
 
 const protocol = 1
 const revision = 3
+// Without reports or control requests, the sender exits; the next hook starts one.
+const idleMs = () => Number(process.env.ACTERA_CLAUDE_DELIVERY_IDLE_MS) || 5 * 60 * 1000
 const identity = home => createHash('sha256').update((process.platform === 'win32' ? path.resolve(home).toLowerCase() : path.resolve(home))).digest('hex')
 const stateFile = home => path.join(home, 'delivery-worker.json')
 async function state(home) {
@@ -48,8 +51,9 @@ export async function deliveryStatus(home) {
 
 async function spawnWorker(home, stdio) {
   await mkdir(home, { recursive: true, mode: 0o700 })
+  // Windows locks a process's working directory; never hold the user's project.
   return spawn(process.execPath, [fileURLToPath(new URL('../bin/delivery-worker.mjs', import.meta.url)), home],
-    { detached: true, windowsHide: true, stdio })
+    { detached: true, windowsHide: true, stdio, cwd: os.homedir() })
 }
 
 // Hooks hand delivery to the worker without waiting for it to start. Reports
@@ -109,7 +113,9 @@ export async function runDelivery(home) {
     for (let i = 0; i < 250 && (await deliveryStatus(home)).running; i++) await delay(20)
   }
   const token = randomBytes(32).toString('hex')
-  let stopping = false, busy = Promise.resolve(), failures = 0
+  // released: the bridge directory was disconnected or another sender took
+  // over, so this one must not write discovery again on its way out.
+  let stopping = false, released = false, idle = false, busy = Promise.resolve(), failures = 0, lastActive = Date.now()
   const previous = await state(home)
   const health = { protocol, revision, identity: id, pid: process.pid, running: true, state: 'idle', lastError: previous?.lastError || null, nextRetryAt: null }
   const serialized = fn => {
@@ -120,7 +126,7 @@ export async function runDelivery(home) {
   async function drain() {
     if (stopping) return { sent: 0, pending: await pendingCount(home) }
     const config = await loadConfig(home, {})
-    if (!config) { stopping = true; return { sent: 0, pending: 0 } }
+    if (!config) { stopping = released = true; return { sent: 0, pending: 0 } }
     health.state = 'sending'; health.nextRetryAt = null
     const result = await deliverBatch(config, { home, limit: 16, timeoutMs: 3000, force: true })
     if (result.error) {
@@ -142,6 +148,7 @@ export async function runDelivery(home) {
     res.setHeader('content-type', 'application/json')
     if (req.url === '/identity') { res.end(JSON.stringify({ identity: id, protocol })); return }
     if (req.headers.authorization !== `Bearer ${token}`) { res.writeHead(403); res.end('{}'); return }
+    lastActive = Date.now()
     try {
       if (req.url === '/status') res.end(JSON.stringify(health))
       else if (req.url === '/stop') { stopping = true; await busy; res.end('{}') }
@@ -198,17 +205,30 @@ export async function runDelivery(home) {
   console.log('READY')
   try {
     while (!stopping) {
+      // Removing the bridge directory or its connection retires the sender.
+      if (!(await loadConfig(home, {}))) { released = true; break }
+      // Keep discovery published so hooks can reach this sender. A file naming
+      // another process means that sender owns the directory now.
+      const published = await state(home)
+      if (!published) await saveState()
+      else if (published.pid !== process.pid) { released = true; break }
       if (await pendingCount(home)) {
+        lastActive = Date.now()
         if (!health.nextRetryAt || Date.parse(health.nextRetryAt) <= Date.now()) await serialized(drain)
-      }
+      } else if (Date.now() - lastActive >= idleMs()) { idle = true; break }
       await delay(200)
     }
   } finally {
     await busy
     // Persist failure history before releasing ownership. A replacement cannot
     // write discovery until this socket closes.
-    health.running = false; health.state = 'stopped'
-    await saveState()
+    if (!released) {
+      health.running = false; health.state = 'stopped'
+      await saveState()
+    }
     await new Promise(resolve => server.close(resolve))
   }
+  // A hook may have saved a report and seen this sender running just before
+  // it stopped answering. Hand that report to a successor.
+  if (idle && await pendingCount(home)) await startDelivery(home)
 }

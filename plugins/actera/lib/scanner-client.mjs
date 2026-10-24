@@ -83,7 +83,9 @@ async function healthy(binary, state) {
 
 async function launch(binary) {
   const token = randomBytes(32).toString('hex')
-  const child = spawn(binary.executable, [], { detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], cwd: vendor })
+  // Windows locks a process's working directory, so running from the plugin
+  // folder would block uninstalling it. The helper reads no files from it.
+  const child = spawn(binary.executable, [], { detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], cwd: os.homedir() })
   let text = ''
   try {
     const ready = await new Promise((resolve, reject) => {

@@ -162,3 +162,44 @@ test('a post-tool hook saves its outcome promptly while an unreachable sender ho
   await ensureDelivery(f.home)
   await until(async () => f.reports.size === 1 && (await status(f.home)).pending === 0)
 })
+
+const alive = pid => { try { process.kill(pid, 0); return true } catch { return false } }
+
+test('a sender whose discovery file was deleted publishes it again and keeps delivering', async t => {
+  const f = await fixture(t)
+  await ensureDelivery(f.home)
+  const { pid } = await deliveryStatus(f.home)
+  await rm(path.join(f.home, 'delivery-worker.json'))
+  await until(async () => (await deliveryStatus(f.home)).running)
+  assert.equal((await deliveryStatus(f.home)).pid, pid)
+  await f.hook('PreToolUse', 'republished')
+  await f.hook('PostToolUse', 'republished')
+  await until(async () => f.reports.size === 1 && (await status(f.home)).pending === 0)
+  assert.equal((await deliveryStatus(f.home)).pid, pid)
+})
+
+test('removing the bridge directory stops its sender', async t => {
+  const f = await fixture(t)
+  await ensureDelivery(f.home)
+  const { pid } = await deliveryStatus(f.home)
+  await rm(f.home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  await until(async () => !alive(pid))
+})
+
+test('an idle sender exits, but not while it still has reports to deliver', async t => {
+  const previous = process.env.ACTERA_CLAUDE_DELIVERY_IDLE_MS
+  process.env.ACTERA_CLAUDE_DELIVERY_IDLE_MS = '1000'
+  t.after(() => { if (previous === undefined) delete process.env.ACTERA_CLAUDE_DELIVERY_IDLE_MS; else process.env.ACTERA_CLAUDE_DELIVERY_IDLE_MS = previous })
+  const f = await fixture(t)
+  f.service.available = false
+  await f.hook('PreToolUse', 'idle')
+  await f.hook('PostToolUse', 'idle')
+  await until(async () => (await deliveryStatus(f.home)).state === 'retrying')
+  const { pid } = await deliveryStatus(f.home)
+  await delay(2500)
+  assert.ok(alive(pid), 'A sender with a backlog must keep retrying')
+  f.service.available = true
+  await until(async () => f.reports.size === 1 && (await status(f.home)).pending === 0)
+  await until(async () => !alive(pid))
+  assert.equal((await deliveryStatus(f.home)).state, 'stopped')
+})

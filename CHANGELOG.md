@@ -6,6 +6,13 @@ Execution outcomes are saved before the delivery worker starts. Previously a
 worker that could not start made every post-tool hook fail, so no outcome was
 recorded or reported. Hooks no longer wait for the worker to start.
 
+The delivery worker exits after five minutes with an empty queue and no tool
+calls, and when its bridge directory or connection is removed. Uninstalling the
+plugin or deleting `~/.actera` no longer leaves a worker running indefinitely.
+A worker whose discovery file is deleted publishes it again instead of blocking
+every new worker. The worker and scanner helper no longer run from the plugin
+or project folder, which blocked deleting those folders on Windows.
+
 ## 0.0.2
 
 `/actera:connect <setup code>` connects with a setup code from the Actera
