@@ -51,6 +51,8 @@ Configure policies on the agent page. Open Claude's `/config` panel, or run
 Claude stores both choices in its user settings. Reconnecting does not reset them,
 report backlogs do not prevent changing them, and agent configuration never changes
 plugin mode. Use `/actera:status` to see the effective settings and delivery status.
+Run `/actera:disconnect` before uninstalling to deliver queued reports and remove
+local state; see [operations](docs/operations.md#credential-rotation).
 After changing settings, use `/reload-plugins` or start a new session before relying
 on the new behavior.
 

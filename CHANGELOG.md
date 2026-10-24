@@ -13,6 +13,9 @@ A worker whose discovery file is deleted publishes it again instead of blocking
 every new worker. The worker and scanner helper no longer run from the plugin
 or project folder, which blocked deleting those folders on Windows.
 
+`/actera:disconnect` delivers queued reports, stops the worker and scanner, and
+removes this machine's Actera state. Run it before uninstalling the plugin.
+
 ## 0.0.2
 
 `/actera:connect <setup code>` connects with a setup code from the Actera

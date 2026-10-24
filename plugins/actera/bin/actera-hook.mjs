@@ -9,6 +9,7 @@ import {
   claudeEvaluationFailure,
   claudeToolDecision,
   configure,
+  disconnect,
   enqueueDecision,
   enqueueToolOutcome,
   evaluateHook,
@@ -81,6 +82,11 @@ async function main() {
   const command = process.argv[2]
   if (command === 'delivery-stop') { await stopDelivery(bridgeHome()); return }
   if (command === 'scanner-stop') { await stopScanner(); return }
+  if (command === 'disconnect') {
+    const result = await disconnect(undefined, { discard: process.argv.includes('--discard') })
+    process.stdout.write(JSON.stringify(result) + '\n')
+    return
+  }
   if (command === 'setup') {
     if (option('mode') !== undefined || option('on-evaluation-error') !== undefined)
       throw new Error('Set Actera mode and evaluation-failure behavior in Claude /config.')
@@ -214,7 +220,7 @@ async function main() {
     }
     return // Non-tool hooks do not inject text into Claude's context.
   }
-  throw new Error('Usage: actera-hook.mjs setup|capture|status|test|ready|flush|link|link-status|native-review|hook')
+  throw new Error('Usage: actera-hook.mjs setup|capture|status|test|ready|flush|link|link-status|native-review|disconnect|hook')
 }
 
 async function readHookInputText(stream) {

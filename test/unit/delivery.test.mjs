@@ -203,3 +203,43 @@ test('an idle sender exits, but not while it still has reports to deliver', asyn
   await until(async () => !alive(pid))
   assert.equal((await deliveryStatus(f.home)).state, 'stopped')
 })
+
+async function disconnectCli(home, ...args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cli, 'disconnect', ...args], { windowsHide: true, env: { ...process.env, ACTERA_CLAUDE_BRIDGE_HOME: home } })
+    let stdout = '', stderr = ''
+    child.stdout.on('data', data => stdout += data); child.stderr.on('data', data => stderr += data)
+    child.on('error', reject); child.on('close', code => resolve({ code, stdout, stderr }))
+  })
+}
+
+test('disconnect delivers queued reports, stops the sender and removes local state', async t => {
+  const f = await fixture(t)
+  f.service.available = false
+  await f.hook('PreToolUse', 'disconnect')
+  await f.hook('PostToolUse', 'disconnect')
+  await until(async () => (await deliveryStatus(f.home)).state === 'retrying')
+  const { pid } = await deliveryStatus(f.home)
+  const refused = await disconnectCli(f.home)
+  assert.equal(refused.code, 1)
+  assert.match(refused.stderr, /1 report\(s\) could not be delivered .*--discard/)
+  assert.equal((await status(f.home)).pending, 1)
+  f.service.available = true
+  const result = await disconnectCli(f.home)
+  assert.equal(result.code, 0, result.stderr)
+  assert.equal(JSON.parse(result.stdout).disconnected, true)
+  assert.equal(f.reports.size, 1)
+  await assert.rejects(readFile(path.join(f.home, 'config.json')), { code: 'ENOENT' })
+  await until(async () => !alive(pid))
+})
+
+test('disconnect --discard removes undeliverable reports', async t => {
+  const f = await fixture(t)
+  f.service.available = false
+  await f.hook('PreToolUse', 'discard')
+  await f.hook('PostToolUse', 'discard')
+  const result = await disconnectCli(f.home, '--discard')
+  assert.equal(result.code, 0, result.stderr)
+  assert.equal(f.reports.size, 0)
+  await assert.rejects(readFile(path.join(f.home, 'config.json')), { code: 'ENOENT' })
+})
