@@ -22,7 +22,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/actera-hook.mjs\" hook",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       }
@@ -34,7 +34,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/actera-hook.mjs\" hook",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       }

@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { deliverBatch, loadConfig, pendingCount, pruneLocalState } from './bridge.mjs'
 
 const protocol = 1
-const revision = 2
+const revision = 3
 const identity = home => createHash('sha256').update((process.platform === 'win32' ? path.resolve(home).toLowerCase() : path.resolve(home))).digest('hex')
 const stateFile = home => path.join(home, 'delivery-worker.json')
 async function state(home) {
@@ -35,7 +35,8 @@ function rpc(port, route, token, timeout = 2000) {
 
 export async function deliveryStatus(home) {
   const saved = await state(home)
-  if (saved) {
+  // A worker that stopped cleanly says so; probing its old port only adds latency.
+  if (saved && saved.running !== false) {
     try {
       const current = await rpc(saved.port, '/status', saved.token, 500)
       if (current.identity === identity(home) && current.protocol === protocol) return current
@@ -45,31 +46,31 @@ export async function deliveryStatus(home) {
   return { ...safe, running: false, state: 'stopped' }
 }
 
+async function spawnWorker(home, stdio) {
+  await mkdir(home, { recursive: true, mode: 0o700 })
+  return spawn(process.execPath, [fileURLToPath(new URL('../bin/delivery-worker.mjs', import.meta.url)), home],
+    { detached: true, windowsHide: true, stdio })
+}
+
+// Hooks hand delivery to the worker without waiting for it to start. Reports
+// are already on disk, so a slow or contested startup cannot cost a report.
+export async function startDelivery(home) {
+  const current = await deliveryStatus(home)
+  if (current.running && current.revision === revision) return
+  const child = await spawnWorker(home, 'ignore')
+  child.on('error', () => {}) // The next hook or status command retries the start.
+  child.unref()
+}
+
+// Explicit commands wait until a current sender is serving this directory.
 export async function ensureDelivery(home) {
   const current = await deliveryStatus(home)
   if (current.running && current.revision === revision) return
-  if (current.running) {
-    // Keep the control protocol compatible with old hooks, but replace the
-    // sender before publishing queue records that need the new implementation.
-    const saved = await state(home)
-    await rpc(saved.port, '/stop', saved.token, 65000).catch(async error => {
-      const latest = await deliveryStatus(home)
-      if (latest.running && latest.revision !== revision) throw error
-    })
-    for (let i = 0; i < 250; i++) {
-      const old = await rpc(saved.port, '/status', saved.token, 500).catch(() => undefined)
-      if (!old) break
-      if (i === 249) throw new Error('Previous delivery worker did not stop')
-      await delay(20)
-    }
-    if ((await deliveryStatus(home)).running) return
-  }
-  await mkdir(home, { recursive: true, mode: 0o700 })
-  const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/delivery-worker.mjs', import.meta.url)), home],
-    { detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = await spawnWorker(home, ['ignore', 'pipe', 'pipe'])
   await new Promise((resolve, reject) => {
     let output = '', errors = ''
-    const timer = setTimeout(() => { child.kill(); reject(new Error('Delivery worker did not start')) }, 5000)
+    // Replacing an older sender waits for its in-flight batch.
+    const timer = setTimeout(() => { child.kill(); reject(new Error('Delivery worker did not start')) }, 70000)
     child.stderr.on('data', data => { errors = (errors + data).slice(-1000) })
     child.once('error', e => { clearTimeout(timer); reject(e) })
     child.once('exit', code => { clearTimeout(timer); if (!output.includes('READY')) reject(new Error(errors || `Delivery worker exited (${code})`)) })
@@ -98,6 +99,15 @@ export async function stopDelivery(home) {
 export async function runDelivery(home) {
   home = path.resolve(home)
   const id = identity(home)
+  const running = await deliveryStatus(home)
+  if (running.running) {
+    if (running.revision >= revision) { console.log('READY'); return }
+    // Replace an older sender before electing, so queue records are only
+    // drained by the current implementation from here on.
+    const old = await state(home)
+    await rpc(old.port, '/stop', old.token, 65000).catch(() => {})
+    for (let i = 0; i < 250 && (await deliveryStatus(home)).running; i++) await delay(20)
+  }
   const token = randomBytes(32).toString('hex')
   let stopping = false, busy = Promise.resolve(), failures = 0
   const previous = await state(home)
@@ -147,22 +157,27 @@ export async function runDelivery(home) {
   // The OS-held listening socket is the election lock. It disappears on process
   // death, avoiding stale-file locks and concurrent recovery/rename races.
   const firstPort = 20000 + parseInt(id.slice(0, 8), 16) % 30000
+  const listen = candidate => new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(candidate, '127.0.0.1', () => { server.removeListener('error', reject); resolve(candidate) })
+  })
   let port
-  for (let offset = 0; offset < 100; offset++) {
+  for (let offset = 0; offset < 100 && !port; offset++) {
     const candidate = firstPort + offset
     try {
-      await new Promise((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(candidate, '127.0.0.1', () => { server.removeListener('error', reject); resolve() })
-      })
-      port = candidate; break
+      port = await listen(candidate)
     } catch (error) {
       if (error.code !== 'EADDRINUSE') throw error
       const owner = await rpc(candidate, '/identity', undefined, 500).catch(() => undefined)
       if (owner?.identity === id && owner.protocol === protocol) {
-        // The elected worker may still be writing its discovery file.
-        for (let i = 0; i < 100; i++) { if ((await deliveryStatus(home)).running) { console.log('READY'); return }; await delay(20) }
-        throw new Error('Delivery worker discovery timed out')
+        // The elected worker may still be writing its discovery file, or a
+        // stopping worker may still hold the port it is about to release.
+        for (let i = 0; i < 100 && !port; i++) {
+          if ((await deliveryStatus(home)).running) { console.log('READY'); return }
+          await delay(20)
+          port = await listen(candidate).catch(() => undefined)
+        }
+        if (!port) throw new Error('Delivery worker discovery timed out')
       }
     }
   }

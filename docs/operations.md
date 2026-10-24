@@ -140,7 +140,7 @@ plugin status; it is not appended to the recovered outcome report.
 
 ## Execution report delivery
 
-Hooks durably save execution reports and wake a single background Node worker. It drains batches independently of further tool calls, retaining files until the API acknowledges them. An OS-owned loopback socket elects one sender per bridge directory; concurrent startup and manual flushes share that sender. Only the authenticated local control channel can flush or stop it. API keys and report bodies are never sent over that channel.
+Hooks durably save execution reports and wake a single background Node worker. A hook writes its report before it starts the worker and does not wait for the worker to start, so a slow or blocked worker cannot drop a report or hold up Claude. It drains batches independently of further tool calls, retaining files until the API acknowledges them. An OS-owned loopback socket elects one sender per bridge directory; concurrent startup and manual flushes share that sender. Only the authenticated local control channel can flush or stop it. API keys and report bodies are never sent over that channel.
 
 Failures retry after 1, 2, 4, 8, 16, then at most 30 seconds. A lost acknowledgement retries the same idempotency key. The worker remains available while Claude is idle. After a process or machine restart, the next hook or `/actera:status` restarts it and resumes the durable queue. `node plugins/actera/bin/actera-hook.mjs delivery-stop` stops the current worker without deleting reports.
 

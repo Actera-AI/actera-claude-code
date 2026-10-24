@@ -97,7 +97,7 @@ async function main() {
     return
   }
   if (command === 'status') {
-    await wakeDelivery()
+    await wakeDelivery(undefined, { wait: true })
     const env = { ...process.env }
     if (option('mode') !== undefined) env.CLAUDE_PLUGIN_OPTION_MODE = option('mode')
     if (option('evaluation-failure') !== undefined) env.CLAUDE_PLUGIN_OPTION_EVALUATION_FAILURE = option('evaluation-failure')

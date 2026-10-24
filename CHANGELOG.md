@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.3
+
+Execution outcomes are saved before the delivery worker starts. Previously a
+worker that could not start made every post-tool hook fail, so no outcome was
+recorded or reported. Hooks no longer wait for the worker to start.
+
 ## 0.0.2
 
 `/actera:connect <setup code>` connects with a setup code from the Actera

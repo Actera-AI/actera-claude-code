@@ -1,4 +1,4 @@
-import { ensureDelivery, flushDelivery, deliveryStatus, stopDelivery } from './delivery.mjs'
+import { ensureDelivery, flushDelivery, deliveryStatus, startDelivery, stopDelivery } from './delivery.mjs'
 import { ExecutionOutcome } from './generated/outcomes.mjs'
 import { DEFAULT_API_ORIGIN } from './defaults.mjs'
 import { runtimeSettings } from './runtime-settings.mjs'
@@ -360,7 +360,6 @@ export async function rememberToolDecision(hook, config, request, decision, home
 
 export async function enqueueToolOutcome(hook, config, home = bridgeHome()) {
   if (!['PostToolUse', 'PostToolUseFailure'].includes(hook.hook_event_name)) return undefined
-  await ensureDelivery(home)
   const key = toolCallKey(hook, config)
   if (!key) return undefined
   const admitted = await readJson(toolCallPath(home, key))
@@ -837,8 +836,10 @@ export async function flush(config, { home = bridgeHome(), force = false } = {})
   return flushDelivery(home)
 }
 
-export async function wakeDelivery(home = bridgeHome()) {
-  if (await loadConfig(home, {})) await ensureDelivery(home)
+// Hooks only hand off to the worker; commands that report on delivery wait for it.
+export async function wakeDelivery(home = bridgeHome(), { wait = false } = {}) {
+  if (!(await loadConfig(home, {}))) return
+  await (wait ? ensureDelivery(home) : startDelivery(home))
 }
 
 export async function pendingCount(home) {

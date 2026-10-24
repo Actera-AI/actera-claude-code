@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm, mkdir, cp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -60,7 +61,7 @@ test('twenty concurrent real hook processes drain all outcomes with a single sen
   assert.equal((await deliveryStatus(f.home)).state, 'idle')
 })
 
-test('new hooks replace an old persistent sender before publishing outcome records', async t => {
+test('a new sender replaces an old persistent sender and delivers its outcome records', async t => {
   const f = await fixture(t)
   const older = path.join(f.home, 'older-plugin')
   await mkdir(path.join(older, 'bin'), { recursive: true })
@@ -68,15 +69,15 @@ test('new hooks replace an old persistent sender before publishing outcome recor
   await cp(fileURLToPath(new URL('../../plugins/actera/.claude-plugin', import.meta.url)), path.join(older, '.claude-plugin'), { recursive: true })
   await cp(fileURLToPath(new URL('../../plugins/actera/bin/delivery-worker.mjs', import.meta.url)), path.join(older, 'bin/delivery-worker.mjs'))
   const implementation = path.join(older, 'lib/delivery.mjs')
-  await writeFile(implementation, (await readFile(implementation, 'utf8')).replace('const revision = 2', 'const revision = 1'))
+  await writeFile(implementation, (await readFile(implementation, 'utf8')).replace('const revision = 3', 'const revision = 2'))
   const worker = spawn(process.execPath, [path.join(older, 'bin/delivery-worker.mjs'), f.home], { windowsHide: true, stdio: 'ignore' })
   worker.on('error', error => { throw error })
   t.after(() => worker.kill())
-  await until(async () => (await deliveryStatus(f.home)).revision === 1)
+  await until(async () => (await deliveryStatus(f.home)).revision === 2)
   const oldPid = (await deliveryStatus(f.home)).pid
   await Promise.all(Array.from({ length: 8 }, () => ensureDelivery(f.home)))
   const current = await deliveryStatus(f.home)
-  assert.equal(current.revision, 2)
+  assert.equal(current.revision, 3)
   assert.notEqual(current.pid, oldPid)
   await f.hook('PreToolUse', 'upgraded')
   await f.hook('PostToolUse', 'upgraded')
@@ -136,4 +137,28 @@ test('a killed sender releases its OS lock and a replacement resumes durable rep
   await ensureDelivery(f.home)
   await until(async () => f.reports.size === 1 && (await status(f.home)).pending === 0)
   assert.notEqual((await deliveryStatus(f.home)).pid, worker.pid)
+})
+
+test('a post-tool hook saves its outcome promptly while an unreachable sender holds the delivery port', async t => {
+  const f = await fixture(t)
+  // A sender for this directory whose discovery file is gone answers the
+  // election probe but cannot be controlled or replaced.
+  const id = createHash('sha256').update(process.platform === 'win32' ? path.resolve(f.home).toLowerCase() : path.resolve(f.home)).digest('hex')
+  const orphan = createServer((req, res) => {
+    req.resume()
+    if (req.url === '/identity') res.end(JSON.stringify({ identity: id, protocol: 1 }))
+    else { res.writeHead(403); res.end('{}') }
+  })
+  await new Promise(resolve => orphan.listen(20000 + parseInt(id.slice(0, 8), 16) % 30000, '127.0.0.1', resolve))
+  t.after(() => new Promise(resolve => orphan.close(resolve)))
+  await f.hook('PreToolUse', 'orphaned')
+  const started = Date.now()
+  await f.hook('PostToolUse', 'orphaned')
+  assert.ok(Date.now() - started < 2500, 'The hook must not wait for a contested sender')
+  const snapshot = await status(f.home)
+  assert.equal(snapshot.queue.executionReports, 1)
+  assert.equal(snapshot.delivery.running, false)
+  await new Promise(resolve => orphan.close(resolve))
+  await ensureDelivery(f.home)
+  await until(async () => f.reports.size === 1 && (await status(f.home)).pending === 0)
 })
