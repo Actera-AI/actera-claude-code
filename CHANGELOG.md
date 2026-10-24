@@ -16,6 +16,11 @@ or project folder, which blocked deleting those folders on Windows.
 `/actera:disconnect` delivers queued reports, stops the worker and scanner, and
 removes this machine's Actera state. Run it before uninstalling the plugin.
 
+A held tool call is released when its Decision is approved on the Actera
+Decision page while Claude's review prompt is open. Previously, closing the
+prompt or choosing **Not now** kept the call denied as awaiting approval even
+after it was approved. The link prompts also offer **I've approved it in Actera**.
+
 ## 0.0.2
 
 `/actera:connect <setup code>` connects with a setup code from the Actera

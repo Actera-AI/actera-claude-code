@@ -122,6 +122,8 @@ test('provider-prefixed MCP operations read as actions instead of raw tool ident
     return { result: { answers: { [e.questions[0].question]: 'Not now' } } }
   })
   on('process.run', ($, e) => {
+    if (e.argv.includes('review-status'))
+      return { value: { exitCode: 0, stdout: JSON.stringify({ id, status: 'PENDING_APPROVAL' }), stderr: '' } }
     expect(e.argv).toContain('link-status')
     return { value: { exitCode: 0, stdout: '{"linked":true}', stderr: '' } }
   })
@@ -129,4 +131,64 @@ test('provider-prefixed MCP operations read as actions instead of raw tool ident
   expect(asked).toBe(true)
   expect(result.decision).toBe('deny')
   expect(result.reason).toBe(`Actera decision ${id} is awaiting approval.`)
+})
+
+function reviewedElsewhere(status: string, linked = false) {
+  const calls: string[][] = []
+  const run = ($, e) => {
+    calls.push(e.argv)
+    if (e.argv.includes('link-status')) return { value: { exitCode: 0, stdout: JSON.stringify({ linked }), stderr: '' } }
+    if (e.argv.includes('review-status')) {
+      expect(e.argv.slice(-2)).toEqual(['--decision-id', id])
+      return { value: { exitCode: 0, stdout: JSON.stringify({ id, status }), stderr: '' } }
+    }
+    throw new Error(`Unexpected bridge command ${e.argv.join(' ')}`)
+  }
+  return { calls, run }
+}
+
+test('an approval made in Actera while the link prompt is open releases the held call', async ($, on) => {
+  on('tool.check', { tool: publish }, () => ({ decision: 'deny', reason: `Actera decision ${id} is awaiting approval.` }))
+  on('tool.call', ($, e) => {
+    expect(e.questions[0].options.map((option) => option.label)).toEqual(['Link account', "I've approved it in Actera", 'Not now'])
+    return { result: { answers: { [e.questions[0].question]: 'Not now' } } }
+  })
+  const bridge = reviewedElsewhere('APPROVED')
+  on('process.run', bridge.run)
+  const result = await $.tool.check({ tool: publish, input: { channel: 'demo', text: 'hi' } })
+  expect(result.decision).toBe('allow')
+  expect(bridge.calls.some((argv) => argv.includes('native-review'))).toBe(false)
+})
+
+test('a rejection made in Actera denies the held call with that reason', async ($, on) => {
+  on('tool.check', { tool: publish }, () => ({ decision: 'deny', reason: `Actera decision ${id} is awaiting approval.` }))
+  on('tool.call', ($, e) => ({ result: { answers: { [e.questions[0].question]: "I've approved it in Actera" } } }))
+  on('process.run', reviewedElsewhere('REJECTED').run)
+  const result = await $.tool.check({ tool: publish, input: { channel: 'demo', text: 'hi' } })
+  expect(result.decision).toBe('deny')
+  expect(result.reason).toBe(`Actera Decision ${id} was rejected in Actera.`)
+})
+
+test('a linked reviewer who closes the prompt still releases a call approved in Actera', async ($, on) => {
+  on('tool.check', { tool: publish }, () => ({ decision: 'deny', reason: `Actera decision ${id} is awaiting approval.` }))
+  on('tool.call', ($, e) => ({ result: { answers: {} } }))
+  on('process.run', reviewedElsewhere('APPROVED', true).run)
+  const result = await $.tool.check({ tool: publish, input: { channel: 'demo', text: 'hi' } })
+  expect(result.decision).toBe('allow')
+})
+
+test('an explicit Deny in Claude is not replaced by a status lookup', async ($, on) => {
+  on('tool.check', { tool: publish }, () => ({ decision: 'deny', reason: `Actera decision ${id} is awaiting approval.` }))
+  on('tool.call', ($, e) => ({ result: { answers: { [e.questions[0].question]: 'Deny' } } }))
+  const calls: string[][] = []
+  on('process.run', ($, e) => {
+    calls.push(e.argv)
+    return e.argv.includes('link-status')
+      ? { value: { exitCode: 0, stdout: '{"linked":true}', stderr: '' } }
+      : { value: { exitCode: 0, stdout: JSON.stringify({ id, status: 'REJECTED' }), stderr: '' } }
+  })
+  const result = await $.tool.check({ tool: publish, input: { channel: 'demo', text: 'hi' } })
+  expect(result.decision).toBe('deny')
+  expect(result.reason).toMatch('was rejected in Claude Code')
+  expect(calls.some((argv) => argv.includes('review-status'))).toBe(false)
 })

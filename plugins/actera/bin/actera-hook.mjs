@@ -9,6 +9,7 @@ import {
   claudeEvaluationFailure,
   claudeToolDecision,
   configure,
+  decisionReview,
   disconnect,
   enqueueDecision,
   enqueueToolOutcome,
@@ -157,6 +158,11 @@ async function main() {
     )
     return
   }
+  if (command === 'review-status') {
+    if (!config) throw new Error('Run setup first')
+    process.stdout.write(JSON.stringify(await decisionReview(config, option('decision-id'))) + '\n')
+    return
+  }
   if (command === 'test') {
     if (!config) throw new Error('Run setup first')
     await agentReadiness(config)
@@ -220,7 +226,7 @@ async function main() {
     }
     return // Non-tool hooks do not inject text into Claude's context.
   }
-  throw new Error('Usage: actera-hook.mjs setup|capture|status|test|ready|flush|link|link-status|native-review|disconnect|hook')
+  throw new Error('Usage: actera-hook.mjs setup|capture|status|test|ready|flush|link|link-status|native-review|review-status|disconnect|hook')
 }
 
 async function readHookInputText(stream) {

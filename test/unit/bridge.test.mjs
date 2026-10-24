@@ -15,6 +15,7 @@ import {
   agentReadiness,
   evaluateHook,
   configure,
+  decisionReview,
   evaluationForHook,
   flush,
   loadConfig,
@@ -135,6 +136,24 @@ test('an approval claimed by the previous plugin version cannot release another 
   const hash = createHash('sha256').update(decisionId).digest('hex')
   await writeFile(path.join(claims, `${'f'.repeat(64)}-${hash}.claimed`), '{}')
   await assert.rejects(nativeReviewDecision(await loadConfig(home), decisionId, 'approve', home), /already released/)
+})
+
+test('a Decision approved in Actera releases one held call and a pending one stays held', async (t) => {
+  const decisionId = 'a5b3c1d2-7f60-4e1b-9c0a-3d2e1f4a5b6c'
+  let status = 'PENDING_APPROVAL'
+  let agent = 'claude-local-test'
+  const { home } = await fixture(t, (endpoint) =>
+    endpoint === `/v1/decisions/${decisionId}/status` ? { body: { id: decisionId, agent_id: agent, status } } : undefined,
+  )
+  const config = await loadConfig(home)
+  assert.deepEqual(await decisionReview(config, decisionId, home), { id: decisionId, status: 'PENDING_APPROVAL' })
+  status = 'APPROVED'
+  assert.deepEqual(await decisionReview(config, decisionId, home), { id: decisionId, status: 'APPROVED' })
+  await assert.rejects(decisionReview(config, decisionId, home), /already released/)
+  await assert.rejects(nativeReviewDecision(config, decisionId, 'approve', home), /already released/)
+  agent = 'another-agent'
+  await assert.rejects(decisionReview(config, decisionId, home), /does not belong/)
+  await assert.rejects(decisionReview(config, '../decisions', home), /Invalid Decision/)
 })
 
 async function runHook(home, payload) {

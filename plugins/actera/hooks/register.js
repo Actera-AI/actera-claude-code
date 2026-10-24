@@ -73,8 +73,29 @@ function reviewQuestion(tool, input) {
   return lines.join('\n')
 }
 
+const approvedInActera = "I've approved it in Actera"
+
+// The reviewer can approve or reject on the Actera Decision page while a
+// prompt here is open. Returns null while the Decision is still pending.
+async function reviewedInActera($, root, decisionId) {
+  const reviewed = await bridgeCommand($, root, 'review-status', '--decision-id', decisionId)
+  if (reviewed.exitCode !== 0)
+    return { decision: 'deny', reason: `Actera could not check Decision ${decisionId}: ${(reviewed.stderr || 'lookup failed').trim()}` }
+  let result
+  try { result = JSON.parse(reviewed.stdout) } catch { /* Checked below. */ }
+  if (result?.id !== decisionId || typeof result.status !== 'string')
+    return { decision: 'deny', reason: 'Actera returned an invalid Decision status.' }
+  if (result.status === 'PENDING_APPROVAL') return null
+  if (result.status === 'APPROVED')
+    return { decision: 'allow', reason: `Actera Decision ${decisionId} was approved in Actera.` }
+  return { decision: 'deny', reason: `Actera Decision ${decisionId} was ${result.status.toLowerCase().replaceAll('_', ' ')} in Actera.` }
+}
+
 async function resolvePending($, decisionId, tool, input) {
     const root = $.plugin.root.replace(/[\\/]$/, '')
+    // Before leaving the call held, or denying it for a local linking problem,
+    // use a review made in Actera meanwhile.
+    const unlessReviewed = async (fallback) => (await reviewedInActera($, root, decisionId)) || fallback
     let linkStatus
     try {
       const status = await bridgeCommand($, root, 'link-status')
@@ -84,29 +105,29 @@ async function resolvePending($, decisionId, tool, input) {
       let linkAnswer
       try {
         linkAnswer = await $.ui.ask(
-          'To review this action, link Claude Code to your Actera account.',
-          ['Link account', 'Not now'],
+          'To review this action here, link Claude Code to your Actera account. You can also approve it on the Decision page in Actera.',
+          ['Link account', approvedInActera, 'Not now'],
         )
-      } catch { return null }
-      if (linkAnswer !== 'Link account') return null
+      } catch { return unlessReviewed(null) }
+      if (linkAnswer !== 'Link account') return unlessReviewed(null)
       const link = await bridgeCommand($, root, 'link', '--json', '--open')
       if (link.exitCode !== 0)
-        return { decision: 'deny', reason: `Actera account linking failed: ${(link.stderr || 'link failed').trim()}` }
+        return unlessReviewed({ decision: 'deny', reason: `Actera account linking failed: ${(link.stderr || 'link failed').trim()}` })
       let browserUrl
       try { browserUrl = JSON.parse(link.stdout).browserUrl } catch { /* Invalid link stays denied. */ }
-      if (!browserUrl) return { decision: 'deny', reason: 'Actera returned an invalid account link.' }
+      if (!browserUrl) return unlessReviewed({ decision: 'deny', reason: 'Actera returned an invalid account link.' })
       let completed
       try {
         completed = await $.ui.ask(
           `Finish linking in the browser, then return here. If it did not open, visit ${browserUrl}`,
-          ["I've linked my account", 'Not now'],
+          ["I've linked my account", approvedInActera, 'Not now'],
         )
-      } catch { return null }
-      if (completed !== "I've linked my account") return null
+      } catch { return unlessReviewed(null) }
+      if (completed !== "I've linked my account") return unlessReviewed(null)
       const verified = await bridgeCommand($, root, 'link-status')
       try { linkStatus = verified.exitCode === 0 ? JSON.parse(verified.stdout) : null } catch { linkStatus = null }
       if (linkStatus?.linked !== true)
-        return { decision: 'deny', reason: `Actera account link is not complete. Decision ${decisionId} remains pending.` }
+        return unlessReviewed({ decision: 'deny', reason: `Actera account link is not complete. Decision ${decisionId} remains pending.` })
     }
 
     const question = reviewQuestion(tool, input)
@@ -114,9 +135,9 @@ async function resolvePending($, decisionId, tool, input) {
     try {
       answer = await $.ui.ask(question, ['Allow once', 'Deny'])
     } catch {
-      return null
+      return unlessReviewed(null)
     }
-    if (answer !== 'Allow once' && answer !== 'Deny') return null
+    if (answer !== 'Allow once' && answer !== 'Deny') return unlessReviewed(null)
 
     const choice = answer === 'Allow once' ? 'approve' : 'reject'
     const reviewed = await bridgeCommand($, root, 'native-review', '--decision-id', decisionId, '--choice', choice)

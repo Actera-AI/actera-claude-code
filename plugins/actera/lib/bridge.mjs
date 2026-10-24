@@ -493,14 +493,7 @@ export async function previousApproval(hook, config, request, home = bridgeHome(
     decision.idempotency_key !== saved.idempotencyKey
   )
     throw new Error('Saved approval does not match the Actera Decision')
-  if (decision.status === 'APPROVED') {
-    try {
-      await writeFile(claimPath, JSON.stringify({ at: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 })
-    } catch (error) {
-      if (error?.code === 'EEXIST') return undefined
-      throw error
-    }
-  }
+  if (decision.status === 'APPROVED' && !(await claimApproval(home, saved.decisionId))) return undefined
   if (decision.status !== 'APPROVED' && decision.status !== 'PENDING_APPROVAL')
     await rm(approvalPath(home, fingerprint), { force: true })
   return decision
@@ -572,20 +565,43 @@ export async function reviewerLinkStatus(config, home = bridgeHome(), timeoutMs 
   return { linked: status.linked === true, workspaceId: reviewer.workspaceId }
 }
 
-export async function nativeReviewDecision(config, decisionId, choice, home = bridgeHome(), timeoutMs = 8000) {
-  if (!/^[0-9a-f-]{36}$/i.test(decisionId) || !['approve', 'reject'].includes(choice))
-    throw new Error('Invalid Decision or review choice')
+async function decisionForAgent(config, decisionId, timeoutMs) {
   const lookup = await fetch(`${config.baseUrl}/v1/decisions/${decisionId}/status`, {
     headers: { authorization: `Bearer ${config.apiKey}` },
     redirect: 'error',
     signal: AbortSignal.timeout(timeoutMs),
   })
   if (!lookup.ok) throw new Error(`Actera decision lookup returned HTTP ${lookup.status}`)
-  const original = await lookup.json()
-  if (original.id !== decisionId || original.agent_id !== config.agentId)
+  const decision = await lookup.json()
+  if (decision.id !== decisionId || decision.agent_id !== config.agentId)
     throw new Error('Decision does not belong to this Claude agent')
-  let decision = original
-  if (original.status === 'PENDING_APPROVAL') {
+  return decision
+}
+
+// An approved Decision releases exactly one held Claude tool call. Returns
+// false when another call already used it.
+async function claimApproval(home, decisionId) {
+  if (await legacyApprovalClaimed(home, decisionId)) return false
+  try {
+    await mkdir(path.dirname(approvalClaimPath(home, decisionId)), { recursive: true, mode: 0o700 })
+    await writeFile(approvalClaimPath(home, decisionId), JSON.stringify({ at: new Date().toISOString() }) + '\n', {
+      flag: 'wx',
+      mode: 0o600,
+    })
+    return true
+  } catch (error) {
+    if (error?.code === 'EEXIST') return false
+    throw error
+  }
+}
+
+const alreadyReleased = () => new Error('This approved Decision already released a Claude tool call')
+
+export async function nativeReviewDecision(config, decisionId, choice, home = bridgeHome(), timeoutMs = 8000) {
+  if (!/^[0-9a-f-]{36}$/i.test(decisionId) || !['approve', 'reject'].includes(choice))
+    throw new Error('Invalid Decision or review choice')
+  let decision = await decisionForAgent(config, decisionId, timeoutMs)
+  if (decision.status === 'PENDING_APPROVAL') {
     const reviewer = await loadReviewer(config, home)
     const response = await fetch(`${config.baseUrl}/v1/decisions/${decisionId}/${choice}`, {
       method: 'POST',
@@ -610,20 +626,16 @@ export async function nativeReviewDecision(config, decisionId, choice, home = br
     decision.status !== (choice === 'approve' ? 'APPROVED' : 'REJECTED')
   )
     throw new Error('Actera returned an unexpected review result')
-  if (choice === 'approve') {
-    if (await legacyApprovalClaimed(home, decisionId))
-      throw new Error('This approved Decision already released a Claude tool call')
-    try {
-      await mkdir(path.dirname(approvalClaimPath(home, decisionId)), { recursive: true, mode: 0o700 })
-      await writeFile(approvalClaimPath(home, decisionId), JSON.stringify({ at: new Date().toISOString() }) + '\n', {
-        flag: 'wx',
-        mode: 0o600,
-      })
-    } catch (error) {
-      if (error?.code === 'EEXIST') throw new Error('This approved Decision already released a Claude tool call')
-      throw error
-    }
-  }
+  if (choice === 'approve' && !(await claimApproval(home, decisionId))) throw alreadyReleased()
+  return { id: decision.id, status: decision.status }
+}
+
+// A reviewer can resolve a held call on the Actera Decision page while
+// Claude's prompt is open. An approval found here is claimed for this call.
+export async function decisionReview(config, decisionId, home = bridgeHome(), timeoutMs = 5000) {
+  if (!/^[0-9a-f-]{36}$/i.test(decisionId)) throw new Error('Invalid Decision')
+  const decision = await decisionForAgent(config, decisionId, timeoutMs)
+  if (decision.status === 'APPROVED' && !(await claimApproval(home, decisionId))) throw alreadyReleased()
   return { id: decision.id, status: decision.status }
 }
 
