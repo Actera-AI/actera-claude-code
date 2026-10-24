@@ -108,15 +108,20 @@ Deactivation revokes the old key and its reviewer links; link the reviewer again
 If events remain queued, the new connection preserves the prior state in an
 archive. Those events cannot be delivered using the new key.
 
-To disable or remove the plugin:
+To remove the plugin, run `/actera:disconnect` in Claude first, then uninstall:
 
 ```sh
-claude plugin disable actera@actera
 claude plugin uninstall actera@actera --scope user
 ```
 
-Disabling the plugin does not revoke server credentials or erase local state.
-Disable the agent key in Actera when retiring the plugin.
+Disconnect delivers queued reports, stops the delivery worker and scanner
+helper, and deletes `~/.actera/claude-code`, including the machine key, reviewer
+link and archives. It stops without deleting anything if reports cannot be
+delivered; `/actera:disconnect --discard` deletes them instead. Uninstalling
+without disconnecting leaves local state in place, and the worker exits within
+five minutes. Neither disconnecting nor uninstalling revokes the agent key;
+disable it in Actera when retiring the plugin. `claude plugin disable
+actera@actera` keeps both the plugin and its local state.
 
 ## Plugin mode
 
@@ -140,8 +145,8 @@ plugin status; it is not appended to the recovered outcome report.
 
 ## Execution report delivery
 
-Hooks durably save execution reports and wake a single background Node worker. It drains batches independently of further tool calls, retaining files until the API acknowledges them. An OS-owned loopback socket elects one sender per bridge directory; concurrent startup and manual flushes share that sender. Only the authenticated local control channel can flush or stop it. API keys and report bodies are never sent over that channel.
+Hooks durably save execution reports and wake a single background Node worker. A hook writes its report before it starts the worker and does not wait for the worker to start, so a slow or blocked worker cannot drop a report or hold up Claude. It drains batches independently of further tool calls, retaining files until the API acknowledges them. An OS-owned loopback socket elects one sender per bridge directory; concurrent startup and manual flushes share that sender. Only the authenticated local control channel can flush or stop it. API keys and report bodies are never sent over that channel.
 
-Failures retry after 1, 2, 4, 8, 16, then at most 30 seconds. A lost acknowledgement retries the same idempotency key. The worker remains available while Claude is idle. After a process or machine restart, the next hook or `/actera:status` restarts it and resumes the durable queue. `node plugins/actera/bin/actera-hook.mjs delivery-stop` stops the current worker without deleting reports.
+Failures retry after 1, 2, 4, 8, 16, then at most 30 seconds. A lost acknowledgement retries the same idempotency key. The worker keeps retrying while reports are queued, and exits after five minutes with an empty queue and no tool calls. It also exits when its bridge directory or connection is removed, and publishes its discovery file again if that file is deleted. Neither the worker nor the scanner helper runs from the plugin or project folder, so they do not block deleting either. After the worker exits, or after a process or machine restart, the next hook or `/actera:status` starts it again and resumes the durable queue. `node plugins/actera/bin/actera-hook.mjs delivery-stop` stops the current worker without deleting reports.
 
 Status separates `queue.executionReports` from `queue.decisionRetries`, and reports `oldestPendingAgeSeconds`. `delivery.state` is `idle`, `sending`, `retrying`, or `stopped`; `nextRetryAt`, `lastError`, and `recoveredAt` describe delivery independently from evaluation failures. Pending reports are local delivery backlog, not proof of a slow Actera service. Checking status can start a stopped worker, and the status tool's own execution report arrives after its snapshot.

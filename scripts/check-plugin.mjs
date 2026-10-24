@@ -12,7 +12,7 @@ export const pluginFiles = [
   'hooks/hooks.json', 'hooks/register.js',
   'lib/bridge.mjs', 'lib/delivery.mjs', 'lib/defaults.mjs', 'lib/input-capture.mjs',
   'lib/runtime-settings.mjs', 'lib/scanner-client.mjs', 'lib/generated/outcomes.mjs',
-  'skills/connect/SKILL.md', 'skills/status/SKILL.md',
+  'skills/connect/SKILL.md', 'skills/disconnect/SKILL.md', 'skills/status/SKILL.md',
   'vendor/gitleaks/LICENSE', 'vendor/gitleaks/THIRD_PARTY_NOTICES.txt', 'vendor/gitleaks/manifest.json',
   ...['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64'].map(p => `vendor/gitleaks/${p}.gz`),
 ].sort()

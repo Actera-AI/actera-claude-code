@@ -7,6 +7,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:f
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { scannerBinary, stopScanner } from '../../plugins/actera/lib/scanner-client.mjs'
 import {
@@ -310,6 +311,9 @@ test('pruning keeps unresolved calls and removes old resolved correlation', asyn
   await utimes(correlation, old, old)
   const result = await runHook(home, { hook_event_name: 'SessionStart', session_id: 'prune' })
   assert.equal(result.code, 0)
+  // The hook only wakes the sender; pruning runs as the sender starts.
+  const exists = (file) => readFile(file).then(() => true, () => false)
+  for (let i = 0; i < 200 && ((await exists(approval)) || (await exists(correlation))); i++) await delay(25)
   await assert.rejects(readFile(approval), { code: 'ENOENT' })
   await assert.rejects(readFile(correlation), { code: 'ENOENT' })
   assert.ok(await readFile(unresolved))

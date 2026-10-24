@@ -1,4 +1,4 @@
-import { ensureDelivery, flushDelivery, deliveryStatus, stopDelivery } from './delivery.mjs'
+import { ensureDelivery, flushDelivery, deliveryStatus, startDelivery, stopDelivery } from './delivery.mjs'
 import { ExecutionOutcome } from './generated/outcomes.mjs'
 import { DEFAULT_API_ORIGIN } from './defaults.mjs'
 import { runtimeSettings } from './runtime-settings.mjs'
@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile, writeFile, mkdir, readdir, rename, rm, stat, link } from 'node:fs/promises'
 import os from 'node:os'
 import { captureInput } from './input-capture.mjs'
+import { stopScanner } from './scanner-client.mjs'
 import path from 'node:path'
 
 const MAX_HOOK_BYTES = 16 * 1024 * 1024
@@ -360,7 +361,6 @@ export async function rememberToolDecision(hook, config, request, decision, home
 
 export async function enqueueToolOutcome(hook, config, home = bridgeHome()) {
   if (!['PostToolUse', 'PostToolUseFailure'].includes(hook.hook_event_name)) return undefined
-  await ensureDelivery(home)
   const key = toolCallKey(hook, config)
   if (!key) return undefined
   const admitted = await readJson(toolCallPath(home, key))
@@ -837,8 +837,27 @@ export async function flush(config, { home = bridgeHome(), force = false } = {})
   return flushDelivery(home)
 }
 
-export async function wakeDelivery(home = bridgeHome()) {
-  if (await loadConfig(home, {})) await ensureDelivery(home)
+// Removes this machine's connection after delivering what it can. The agent
+// key stays valid in Actera until an administrator disables it.
+export async function disconnect(home = bridgeHome(), { discard = false } = {}) {
+  const config = await loadConfig(home, {})
+  if (config && !discard) {
+    const result = await flush(config, { home, force: true })
+    if (result.pending)
+      throw new Error(`${result.pending} report(s) could not be delivered${result.error ? ` (${result.error})` : ''}. Run disconnect --discard to delete them.`)
+  }
+  await stopDelivery(home)
+  // Only a scanner that was extracted here can be running.
+  const scanner = path.join(home, 'scanner')
+  if (await stat(scanner).catch(() => undefined)) await stopScanner(scanner)
+  await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  return { disconnected: !!config, home }
+}
+
+// Hooks only hand off to the worker; commands that report on delivery wait for it.
+export async function wakeDelivery(home = bridgeHome(), { wait = false } = {}) {
+  if (!(await loadConfig(home, {}))) return
+  await (wait ? ensureDelivery(home) : startDelivery(home))
 }
 
 export async function pendingCount(home) {
