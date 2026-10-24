@@ -304,7 +304,7 @@ test('a full queue resumes delivery when the API is reachable again', async (t) 
   await Promise.all(Array.from({ length: 128 }, (_, index) =>
     writeFile(path.join(queue, `${index}.json`), JSON.stringify({ decision_id: 'decision-1', idempotency_key: `queued-${index}`, outcome: 'SUCCESS', agent: { id: 'claude-local-test' }, context: { claude: {} }, details: {} }))))
   const result = await runHook(home, { hook_event_name: 'SessionStart', session_id: 'recovered' })
-  assert.equal(result.code, 0)
+  assert.equal(result.code, 0, result.stderr)
   assert.equal(result.stderr, '')
   assert.ok((await status(home)).pending < 128)
   assert.ok(requests.some((request) => request.path.endsWith('/reports')))
