@@ -8,7 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import test from 'node:test'
+import test, { after } from 'node:test'
 import { scannerBinary, stopScanner } from '../../plugins/actera/lib/scanner-client.mjs'
 import {
   activityForHook,
@@ -29,6 +29,18 @@ import {
 
 const cli = fileURLToPath(new URL('../../plugins/actera/bin/actera-hook.mjs', import.meta.url))
 const key = 'actera_' + 'x'.repeat(40)
+
+// In-process input capture extracts and starts the scanner under the default
+// bridge home. Keep it, and anything else defaulting there, out of ~/.actera.
+const suiteHome = await mkdtemp(path.join(os.tmpdir(), 'actera-bridge-suite-'))
+const previousHome = process.env.ACTERA_CLAUDE_BRIDGE_HOME
+process.env.ACTERA_CLAUDE_BRIDGE_HOME = suiteHome
+after(async () => {
+  await stopScanner(path.join(suiteHome, 'scanner')).catch(() => {})
+  if (previousHome === undefined) delete process.env.ACTERA_CLAUDE_BRIDGE_HOME
+  else process.env.ACTERA_CLAUDE_BRIDGE_HOME = previousHome
+  await rm(suiteHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+})
 
 test('a failed command hook does not block Claude tool calls', async () => {
   const manifest = JSON.parse(await readFile(new URL('../../plugins/actera/hooks/hooks.json', import.meta.url), 'utf8'))
@@ -292,7 +304,7 @@ test('a full queue resumes delivery when the API is reachable again', async (t) 
   await Promise.all(Array.from({ length: 128 }, (_, index) =>
     writeFile(path.join(queue, `${index}.json`), JSON.stringify({ decision_id: 'decision-1', idempotency_key: `queued-${index}`, outcome: 'SUCCESS', agent: { id: 'claude-local-test' }, context: { claude: {} }, details: {} }))))
   const result = await runHook(home, { hook_event_name: 'SessionStart', session_id: 'recovered' })
-  assert.equal(result.code, 0)
+  assert.equal(result.code, 0, result.stderr)
   assert.equal(result.stderr, '')
   assert.ok((await status(home)).pending < 128)
   assert.ok(requests.some((request) => request.path.endsWith('/reports')))
