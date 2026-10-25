@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.4
+
+When a held tool call is approved and released, Claude is told that Actera
+held it and which Decision approved it. Previously Claude saw only the tool's
+result and could describe the call as one that ran without a check.
+
 ## 0.0.3
 
 Execution outcomes are saved before the delivery worker starts. Previously a

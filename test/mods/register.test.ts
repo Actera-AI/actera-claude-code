@@ -192,3 +192,21 @@ test('an explicit Deny in Claude is not replaced by a status lookup', async ($, 
   expect(result.reason).toMatch('was rejected in Claude Code')
   expect(calls.some((argv) => argv.includes('review-status'))).toBe(false)
 })
+
+test('a held call approved in Actera runs through the PreToolUse hook', async ($, on) => {
+  on('classic.PreToolUse', { tool: publish }, () => ({
+    deny: `Actera decision ${id} is awaiting approval. Approve it in Actera, then retry this exact tool call.`,
+  }))
+  on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({
+    result: { answers: { [e.questions[0].question]: "I've approved it in Actera" } },
+  }))
+  let ran = false
+  on('tool.call', { tool: publish }, () => {
+    ran = true
+    return { result: { ok: true } }
+  })
+  on('process.run', reviewedElsewhere('APPROVED').run)
+  const result = await $.tool.call({ tool: publish, channel: 'demo', text: 'hi' })
+  expect(result.deny).toBeUndefined()
+  expect(ran).toBe(true)
+})

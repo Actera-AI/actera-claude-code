@@ -28,7 +28,8 @@ can read that file or modify the plugin may misuse its delegated authority.
 **Deny** rejects it. A reviewer can also approve or reject on the Decision page
 in Actera while Claude's prompt is open. Choosing **I've approved it in Actera**,
 **Not now**, or closing the prompt checks the Decision first: an approval
-releases the held call once and a rejection denies it. Otherwise it stays pending. Without
+releases the held call once and a rejection denies it. Otherwise it stays pending. A released
+call reaches Claude with a note that Actera held it and which Decision approved it. Without
 the mod, approve in Actera and retry the same tool and arguments in the same
 session within one hour. Another invocation needs its own decision.
 
