@@ -1,6 +1,7 @@
 {
   "owner": "Actera-AI",
   "repositories": [
+    "Actera-AI/actera-agent-hooks",
     "Actera-AI/actera-sdk-typescript",
     "Actera-AI/actera-claude-code"
   ],

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
 import { connectWithSetupCode, pair } from '../../plugins/actera/bin/pair.mjs'
-import { loadConfig } from '../../plugins/actera/lib/bridge.mjs'
+import { loadConfig } from '../../plugins/actera/vendor/agent-hooks/src/hosts/claude-code/bridge.mjs'
 
 const home = await mkdtemp(join(tmpdir(), 'actera-pair-test-'))
 process.env.ACTERA_CLAUDE_BRIDGE_HOME = home
@@ -28,6 +28,7 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
       starts++; redeemed = false
       const start = JSON.parse(body)
       publicKey = start.public_key
+      assert.equal(start.client, 'claude_code', 'Actera labels the connection as Claude Code')
       claimHash = start.claim_hash
       response.end(JSON.stringify({ code, browser_url: `http://localhost:${server.address().port}/connect-claude?code=${code}` }))
     } else if (request.url === `/v1/agent-connections/${code}/redeem`) {
@@ -55,7 +56,7 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
       return fetch(`${origin}${target.pathname}${target.search}`, options)
     })
     let display
-    const result = await pair(undefined, { open: () => {}, onWaiting: (value) => { display = value } })
+    const result = await pair({ open: () => {}, onWaiting: (value) => { display = value } })
     assert.deepEqual(result, { agentId: 'test-agent', baseUrl: 'https://app.actera.dev', capture: 'tool-inputs' })
     assert.equal(display.codeHint, 'aaaaaaaa')
     assert.equal(JSON.stringify(display).includes(apiKey), false)
@@ -65,7 +66,7 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
     assert.equal(saved.baseUrl, 'https://app.actera.dev')
     assert.equal(saved.mode, undefined)
     assert.equal(saved.onEvaluationError, undefined)
-    await pair(undefined, { open: () => assert.fail('healthy connection reopened the browser') })
+    await pair({ open: () => assert.fail('healthy connection reopened the browser') })
     assert.equal(starts, 1)
     const oldMode = process.env.CLAUDE_PLUGIN_OPTION_MODE
     const oldFailure = process.env.CLAUDE_PLUGIN_OPTION_EVALUATION_FAILURE
@@ -77,7 +78,7 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
         else process.env[name] = value
       }
     })
-    await pair(undefined, { reconnect: true, open: (url) => assert.equal(new URL(url).searchParams.get('agent'), 'test-agent') })
+    await pair({ reconnect: true, open: (url) => assert.equal(new URL(url).searchParams.get('agent'), 'test-agent') })
     assert.equal(starts, 2)
     const reconnected = await loadConfig()
     assert.equal(reconnected.mode, 'ENFORCING')
@@ -95,9 +96,9 @@ test('browser pairing uses the bundled endpoint without URL input and keeps the 
       else process.env.ACTERA_API_ORIGIN = oldOrigin
     })
     process.env.ACTERA_API_ORIGIN = 'http://example.com'
-    await assert.rejects(pair(undefined, { open: () => {} }), /HTTPS/)
+    await assert.rejects(pair({ open: () => {} }), /HTTPS/)
     process.env.ACTERA_API_ORIGIN = origin
-    const overridden = await pair(undefined, { open: () => {} })
+    const overridden = await pair({ open: () => {} })
     assert.equal(overridden.baseUrl, origin)
     assert.equal(starts, 3)
     assert.equal(JSON.parse(await readFile(join(home, 'config.json'), 'utf8')).baseUrl, origin)
@@ -114,7 +115,8 @@ test('a setup code connects to the agent it was made for without a browser', asy
     for await (const chunk of request) chunks.push(chunk)
     response.setHeader('content-type', 'application/json')
     if (request.url === '/v1/agent-setup-codes/redeem' && request.method === 'POST') {
-      const code = JSON.parse(Buffer.concat(chunks).toString('utf8')).code
+      const { code, client } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      assert.equal(client, 'claude_code')
       const state = codes.get(code)
       if (state === 'fresh') {
         codes.set(code, 'used')
@@ -134,15 +136,15 @@ test('a setup code connects to the agent it was made for without a browser', asy
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   try {
     const origin = `http://127.0.0.1:${server.address().port}`
-    await assert.rejects(connectWithSetupCode('USED-USED-USED-USED', origin), /already used or has expired/)
-    await assert.rejects(connectWithSetupCode('NOPE-NOPE-NOPE-NOPE', origin), /does not recognize/)
-    const result = await connectWithSetupCode(' ABCD-EFGH-JKMN-PQRS ', origin)
+    await assert.rejects(connectWithSetupCode('USED-USED-USED-USED', { origin }), /already used or has expired/)
+    await assert.rejects(connectWithSetupCode('NOPE-NOPE-NOPE-NOPE', { origin }), /does not recognize/)
+    const result = await connectWithSetupCode(' ABCD-EFGH-JKMN-PQRS ', { origin })
     assert.deepEqual(result, { agentId: 'setup-agent', baseUrl: origin, capture: 'tool-inputs' })
     const saved = JSON.parse(await readFile(join(home, 'config.json'), 'utf8'))
     assert.equal(saved.apiKey, apiKey)
     assert.equal(saved.agentId, 'setup-agent')
     assert.equal(saved.baseUrl, origin)
-    await assert.rejects(connectWithSetupCode('ABCD-EFGH-JKMN-PQRS', origin), /already used/)
+    await assert.rejects(connectWithSetupCode('ABCD-EFGH-JKMN-PQRS', { origin }), /already used/)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
