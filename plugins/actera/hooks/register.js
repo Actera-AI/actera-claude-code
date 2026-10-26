@@ -165,8 +165,10 @@ export function register(on) {
     if (!decisionId) return decided
     const { tool, tool_use_id, ...input } = e
     const reviewed = await resolvePending($, decisionId, tool, input)
+    // Claude sees only the tool's result otherwise, and would describe a held and
+    // approved call as one that ran unchecked. A denial's reason already reaches it.
     return reviewed?.decision === 'allow'
-      ? { allow: true }
+      ? { allow: true, additionalContext: [`Actera held this tool call for approval, then released it. ${reviewed.reason}`] }
       : reviewed?.decision === 'deny'
         ? { deny: reviewed.reason }
         : decided
