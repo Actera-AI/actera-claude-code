@@ -10,4 +10,4 @@ allows a $1 model budget per scenario. Ordinary CI makes no paid model calls.
 Temporary state and credentials stay in ignored `.dev` directories.
 
 Run `npm run check:distribution` before proposing changes. Integration behavior
-must follow the reviewed operations and response fields in `contract/`.
+must follow the reviewed operations and response fields in the vendored package's API contract.

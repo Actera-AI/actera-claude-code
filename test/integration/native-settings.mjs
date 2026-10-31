@@ -1,4 +1,4 @@
-import { stopDelivery } from '../../plugins/actera/lib/delivery.mjs'
+import { stopDelivery } from '../../plugins/actera/vendor/agent-hooks/src/core/delivery.mjs'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -6,8 +6,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { configure, status } from '../../plugins/actera/lib/bridge.mjs'
-import { stopScanner } from '../../plugins/actera/lib/scanner-client.mjs'
+import { configure, status } from '../../plugins/actera/vendor/agent-hooks/src/hosts/claude-code/bridge.mjs'
+import { stopScanner } from '../../plugins/actera/vendor/agent-hooks/src/core/scanner-client.mjs'
 import { isolatedClaudeSettings } from './claude-settings.mjs'
 
 // Real Claude settings loading, hooks and tool dispatch, with a controlled local

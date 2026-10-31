@@ -5,16 +5,15 @@ import { readdir, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
+import { lockedFiles } from './vendor-agent-hooks.mjs'
 
+const gitleaks = 'vendor/agent-hooks/vendor/gitleaks'
 export const pluginFiles = [
   '.claude-plugin/plugin.json', 'LICENSE', 'NOTICE',
-  'bin/actera-hook.mjs', 'bin/pair.mjs', 'bin/delivery-worker.mjs',
+  'bin/actera-hook.mjs', 'bin/pair.mjs',
   'hooks/hooks.json', 'hooks/register.js',
-  'lib/bridge.mjs', 'lib/delivery.mjs', 'lib/defaults.mjs', 'lib/input-capture.mjs',
-  'lib/runtime-settings.mjs', 'lib/scanner-client.mjs', 'lib/generated/outcomes.mjs',
   'skills/connect/SKILL.md', 'skills/disconnect/SKILL.md', 'skills/status/SKILL.md',
-  'vendor/gitleaks/LICENSE', 'vendor/gitleaks/THIRD_PARTY_NOTICES.txt', 'vendor/gitleaks/manifest.json',
-  ...['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64'].map(p => `vendor/gitleaks/${p}.gz`),
+  ...lockedFiles().map(file => `vendor/agent-hooks/${file}`),
 ].sort()
 const source = resolve(fileURLToPath(new URL('../plugins/actera/', import.meta.url)))
 
@@ -44,10 +43,10 @@ export async function checkPlugin(root = source) {
     assert.ok((await readFile(resolve(root, file))).equals(await readFile(resolve(source, file))), `Installed file differs: ${file}`)
   }
   assert.deepEqual(await readFile(resolve(root, 'LICENSE')), await readFile(new URL('../LICENSE', import.meta.url)), 'Installed project license differs')
-  const bundles = JSON.parse(await readFile(resolve(root, 'vendor/gitleaks/manifest.json'), 'utf8'))
+  const bundles = JSON.parse(await readFile(resolve(root, gitleaks, 'manifest.json'), 'utf8'))
   const hash = bytes => createHash('sha256').update(bytes).digest('hex')
   for (const entry of Object.values(bundles.binaries)) {
-    const bytes = await readFile(resolve(root, 'vendor/gitleaks', entry.file))
+    const bytes = await readFile(resolve(root, gitleaks, entry.file))
     assert.equal(hash(bytes), entry.compressedSha256)
     assert.equal(hash(gunzipSync(bytes)), entry.sha256)
   }
