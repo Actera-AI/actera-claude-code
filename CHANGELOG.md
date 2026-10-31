@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.5
+
+The hook bridge, delivery worker, pairing and bundled scanner now come from the
+[agent-hooks package](https://github.com/Actera-AI/actera-agent-hooks) 0.3.1,
+vendored in the plugin and pinned by checksum. Decisions, execution reports,
+local state and settings are unchanged; existing connections and queued reports
+carry over. New connections tell Actera they come from Claude Code. The scanner
+helpers were rebuilt from the same Gitleaks and dependency versions.
+
 ## 0.0.4
 
 When a held tool call is approved and released, Claude is told that Actera

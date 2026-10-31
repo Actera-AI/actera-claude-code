@@ -130,7 +130,7 @@ capture settings, and troubleshooting, and [SECURITY.md](SECURITY.md) for report
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for checks, contract updates, scanner builds
+See [CONTRIBUTING.md](CONTRIBUTING.md) for checks, updating the vendored hook package
 and release instructions. [Integration tests](docs/integration-tests.md) cover the
 offline behavior and optional native Claude configuration checks. Development files stay outside the
 installed plugin; it contains runtime hooks, skills, scanner bundles and licenses.

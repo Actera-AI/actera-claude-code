@@ -4,12 +4,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "test": "npm run check:contract && node --test test/unit/*.test.mjs",
+    "test": "node scripts/vendor-agent-hooks.mjs --check && node --test test/unit/*.test.mjs",
     "test:native-settings": "node test/integration/native-settings.mjs",
-    "generate:outcomes": "node scripts/generate-outcomes.mjs",
-    "check:contract": "node scripts/check-contract.mjs && node scripts/generate-outcomes.mjs --check",
     "test:mods": "node scripts/stage-mod-tests.mjs && claude plugin test .tools/mod-tests",
-    "check:distribution": "node scripts/check-distribution.mjs && node scripts/check-plugin.mjs"
+    "check:distribution": "node scripts/check-distribution.mjs && node scripts/check-plugin.mjs",
+    "vendor:agent-hooks": "node scripts/vendor-agent-hooks.mjs"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.292"

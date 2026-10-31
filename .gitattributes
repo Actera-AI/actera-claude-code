@@ -1,4 +1,4 @@
 * text=auto eol=lf
 *.tgz binary
 
-plugins/actera/vendor/gitleaks/*.gz binary
+plugins/actera/vendor/agent-hooks/vendor/gitleaks/*.gz binary
