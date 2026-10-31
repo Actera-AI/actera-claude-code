@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.6
+
+Questions Claude asks with `AskUserQuestion`, including Actera's own review
+prompt, report their outcome again. Claude adds the answer to the tool input
+after the call is checked, so the report did not match the checked call and
+`/actera:status` showed a delivery error after every question. Uses
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.3.2.
+
 ## 0.0.5
 
 The hook bridge, delivery worker, pairing and bundled scanner now come from the
