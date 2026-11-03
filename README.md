@@ -102,7 +102,9 @@ with capture status and redacted JSON pointer paths, reasons, and detector rule 
 Each decision request sends the tool name, the redacted tool input (or only its
 field names in `metadata` mode), the MCP server key and name for MCP tools, and
 Claude's session, prompt, subagent, and tool-use identifiers, working directory,
-and permission mode. Execution reports repeat the same action and context.
+and permission mode. Policies read these under `context`, for example
+`context.claude.permission_mode` or `context.claude.cwd`. Execution reports repeat
+the same action and context.
 Prompt text, model output, and tool results are never sent.
 
 The scanner is bundled for Windows, macOS, and Linux (x64 and ARM64), verified
