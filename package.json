@@ -8,6 +8,7 @@
     "test:native-settings": "node test/integration/native-settings.mjs",
     "test:mods": "node scripts/stage-mod-tests.mjs && claude plugin test .tools/mod-tests",
     "check:distribution": "node scripts/check-distribution.mjs && node scripts/check-plugin.mjs",
+    "check:release": "node scripts/vendor-agent-hooks.mjs --verify-release",
     "vendor:agent-hooks": "node scripts/vendor-agent-hooks.mjs"
   },
   "devDependencies": {
