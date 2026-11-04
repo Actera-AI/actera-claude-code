@@ -1,19 +1,19 @@
 {
   "name": "@actera-ai/agent-hooks",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "host": "claude-code",
   "source": {
-    "release": "v0.3.3",
-    "url": "https://github.com/Actera-AI/actera-agent-hooks/releases/tag/v0.3.3"
+    "release": "v0.4.0",
+    "url": "https://github.com/Actera-AI/actera-agent-hooks/releases/tag/v0.4.0"
   },
-  "archiveSha256": "f0f56ddcc18b3ede7466b384759d9cd79dfdf1b9c1a44b9d34201ccb6c40c0ef",
+  "archiveSha256": "9dd790ff3311e7bd35363fdf02da77401b7186490b06d63f4e9b114192d4bf43",
   "files": {
     "bin/delivery-worker.mjs": "6ba3ffe9364505f0bf6480a9f4f4c528a02e28786c92e6e70ff07572052fad67",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "NOTICE": "33e6191cdfa3f4bf180c663b1a5b529d390189d93b1457229fc4d9e1bf654f29",
-    "package.json": "ba1960aba44b7f33f86e59df1f11b1ba2e2ee81799b7f65622b84a1844328e1e",
+    "package.json": "ff0fd1043cc3e29baf0488761fe4bd63d6bc0535c30905b9b8b903231d552347",
     "README.md": "d01a1a4b153ec9b0652ff1fe99967bca41146c6947f25f4298a63874ade8397d",
-    "src/core/bridge.mjs": "9a2224d89e6349c183621a3be0f3339bc3171d3d6ab1249810bfc20fcaf2b6c8",
+    "src/core/bridge.mjs": "40b50624be6dd5c460106908db23aa13b6b32ae3c91917679a9b0e3f6c1d22dd",
     "src/core/defaults.mjs": "a80c68670f0a66376ff8842cda5875d5a33ea932950163859c056b284c4eded7",
     "src/core/delivery.mjs": "2ed1b88f9b9dcf7bcd0ca7ae016d4ff799ec1b1911c5f8e75a739d3471cbfdc4",
     "src/core/generated/outcomes.mjs": "27c00ac7cdbdf28696ddadb71d46225df6b7ce86d82695ea7e6686fc517f3482",

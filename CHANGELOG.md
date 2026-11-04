@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.8
+
+`/actera:disconnect` also ends the connection in Actera, so the agent shows as
+disconnected and its key stops working. If Actera cannot be reached, local state is still
+removed and the command says to disconnect the agent in Actera. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.0.
+
 ## 0.0.7
 
 Vendors only the core and the Claude Code adapter of
