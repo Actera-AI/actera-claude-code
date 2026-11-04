@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.7
+
+Vendors only the core and the Claude Code adapter of
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.3.3, taken from its
+published release. Behavior is unchanged: 0.3.3 only changed the Codex adapter.
+
 ## 0.0.6
 
 Questions Claude asks with `AskUserQuestion`, including Actera's own review

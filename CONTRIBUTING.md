@@ -26,12 +26,18 @@ tracked paths; the secret scan checks Git history. Neither replaces review of
 new examples, fixtures, and release contents.
 
 The hook bridge, delivery worker, input capture and bundled scanner come from
-the [agent-hooks package](https://github.com/Actera-AI/actera-agent-hooks), vendored under
-`plugins/actera/vendor/agent-hooks`. Change them in that package, run `npm pack` there, then vendor the archive here
-with `npm run vendor:agent-hooks -- <archive.tgz>`. The script records every file's
-SHA-256 in `scripts/agent-hooks.lock.json`; `npm test` and the installation check
-reject any vendored file that differs. Do not edit vendored files in place. The
-package owns the API contract snapshot, scanner sources and their checks.
+the [agent-hooks package](https://github.com/Actera-AI/actera-agent-hooks), vendored from
+a release under `plugins/actera/vendor/agent-hooks`. Only the core and the Claude Code
+adapter are vendored. Change them in that package and release it, then move this plugin
+to the release in the pull request that needs it with
+`npm run vendor:agent-hooks -- --version <x.y.z>`. The script names the release in
+`scripts/agent-hooks.lock.json` and records every file's SHA-256; `npm test` and the
+installation check reject any vendored file that differs. CI also downloads the named
+release and checks the files against it (`npm run check:release`), and warns when a
+newer release exists. To try an unreleased change, `npm run vendor:agent-hooks -- --from
+../actera-agent-hooks` vendors a local checkout; CI refuses a lock from a local pack. Do
+not edit vendored files in place. The package owns the API contract snapshot, scanner
+sources and their checks.
 
 Describe user-visible changes in `CHANGELOG.md`. Release tags are immutable;
 publish a new version for corrections. Follow the

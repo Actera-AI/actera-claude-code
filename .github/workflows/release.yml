@@ -62,6 +62,9 @@ jobs:
       - name: Require clean publication history
         run: node scripts/check-publication.mjs --history
         timeout-minutes: 5
+      - name: Vendored files match the agent-hooks release named in the lock
+        run: node scripts/vendor-agent-hooks.mjs --verify-release
+        timeout-minutes: 5
       - name: Verify plugin version
         run:
           node -e "if ('v'+JSON.parse(require('fs').readFileSync('plugins/actera/.claude-plugin/plugin.json')).version !==

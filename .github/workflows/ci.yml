@@ -115,6 +115,9 @@ jobs:
         timeout-minutes: 5
       - run: npm run check:distribution
         timeout-minutes: 5
+      - name: Vendored files match the agent-hooks release named in the lock
+        run: npm run check:release
+        timeout-minutes: 5
       - name: Check publication history and regression cases
         run: node scripts/check-publication.mjs --history && node --test scripts/publication.test.mjs
         timeout-minutes: 5
