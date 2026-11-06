@@ -155,6 +155,10 @@ async function resolvePending($, decisionId, tool, input) {
     return { decision: 'allow', reason: `Actera Decision ${decisionId} was approved by the linked reviewer.` }
 }
 
+function toolInput({ tool, tool_use_id, ...input }) {
+  return input
+}
+
 export function register(on) {
   // This event wraps the command PreToolUse hook itself. It is reached before
   // Claude settles permission mode, including Bypass permissions in Desktop.
@@ -163,28 +167,12 @@ export function register(on) {
     if (!decided?.deny) return decided
     const decisionId = pendingDecision(decided.deny, e.tool)
     if (!decisionId) return decided
-    const { tool, tool_use_id, ...input } = e
-    const reviewed = await resolvePending($, decisionId, tool, input)
-    // Claude sees only the tool's result otherwise, and would describe a held and
-    // approved call as one that ran unchecked. A denial's reason already reaches it.
-    return reviewed?.decision === 'allow'
-      ? { allow: true, additionalContext: [`Actera held this tool call for approval, then released it. ${reviewed.reason}`] }
-      : reviewed?.decision === 'deny'
-        ? { deny: reviewed.reason }
-        : decided
+    const reviewed = await resolvePending($, decisionId, e.tool, toolInput(e))
+    // The hook sees the approval, claims it and releases this call once.
+    if (reviewed?.decision === 'allow') return next(e)
+    if (reviewed?.decision === 'deny') return { deny: reviewed.reason }
+    return decided
   }).catch(async ($, e, next) => ({
     deny: `Actera could not complete the native review (${next.error.kind}). The tool call was not released.`,
-  }))
-
-  // Older hosts may expose the PreToolUse denial only at the permission check.
-  on('tool.check', async ($, e, next) => {
-    const decided = await next(e)
-    if (decided?.decision !== 'deny') return decided
-    const decisionId = pendingDecision(decided.reason || '', e.tool)
-    if (!decisionId) return decided
-    return (await resolvePending($, decisionId, e.tool, e.input)) || decided
-  }).catch(async ($, e, next) => ({
-    decision: 'deny',
-    reason: `Actera could not complete the native review (${next.error.kind}). The tool call was not released.`,
   }))
 }

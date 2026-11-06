@@ -27,6 +27,8 @@
   "license": "Apache-2.0",
   "documentationUrl": "https://github.com/Actera-AI/actera-claude-code#readme",
   "supportUrl": "https://github.com/Actera-AI/actera-claude-code/issues",
+  "privacyPolicyUrl": "https://actera.dev/legal/privacy-policy",
+  "termsOfServiceUrl": "https://actera.dev/legal/terms-and-conditions",
   "keywords": [
     "actera",
     "policy",
