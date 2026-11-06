@@ -1,6 +1,5 @@
-// The command PreToolUse hook creates the Actera Decision. This mod reviews
-// the command-hook denial in the same tool call before permission mode settles;
-// the permission-check hook remains as a compatibility fallback.
+// The command PreToolUse hook creates the Actera Decision and denies a call that
+// waits for approval. This mod reviews that denial in the same tool call.
 const pendingReason = /^Actera decision ([0-9a-f-]{36}) is awaiting approval\./i
 const prefixedPendingReason = /^PreToolUse:(.+?) hook error: Actera decision ([0-9a-f-]{36}) is awaiting approval\./i
 
@@ -160,18 +159,16 @@ function toolInput({ tool, tool_use_id, ...input }) {
 }
 
 export function register(on) {
-  // This event wraps the command PreToolUse hook itself. It is reached before
-  // Claude settles permission mode, including Bypass permissions in Desktop.
-  on('classic.PreToolUse', async ($, e, next) => {
-    const decided = await next(e)
-    if (!decided?.deny) return decided
-    const decisionId = pendingDecision(decided.deny, e.tool)
-    if (!decisionId) return decided
+  // A hook's denial comes back here as a failed tool call. Running next again
+  // repeats the command hook, which allows the call once Actera has approved it.
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    const decisionId = result?.isError ? pendingDecision(result.text || '', e.tool) : undefined
+    if (!decisionId) return result
     const reviewed = await resolvePending($, decisionId, e.tool, toolInput(e))
-    // The hook sees the approval, claims it and releases this call once.
     if (reviewed?.decision === 'allow') return next(e)
     if (reviewed?.decision === 'deny') return { deny: reviewed.reason }
-    return decided
+    return result
   }).catch(async ($, e, next) => ({
     deny: `Actera could not complete the native review (${next.error.kind}). The tool call was not released.`,
   }))
