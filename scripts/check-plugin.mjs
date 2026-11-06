@@ -9,7 +9,7 @@ import { lockedFiles } from './vendor-agent-hooks.mjs'
 
 const gitleaks = 'vendor/agent-hooks/vendor/gitleaks'
 export const pluginFiles = [
-  '.claude-plugin/plugin.json', 'LICENSE', 'NOTICE',
+  '.claude-plugin/icon.png', '.claude-plugin/plugin.json', 'LICENSE', 'NOTICE', 'README.md',
   'bin/actera-hook.mjs', 'bin/pair.mjs',
   'hooks/hooks.json', 'hooks/register.js',
   'skills/connect/SKILL.md', 'skills/disconnect/SKILL.md', 'skills/status/SKILL.md',

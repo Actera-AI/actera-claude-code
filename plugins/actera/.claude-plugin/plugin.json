@@ -1,7 +1,7 @@
 {
   "name": "actera",
   "displayName": "Actera",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "userConfig": {
     "mode": {
       "type": "string",
@@ -21,12 +21,14 @@
   "author": {
     "name": "Actera"
   },
-  "description": "Monitor and enforce tool decisions with execution reports in Actera",
+  "description": "Check every Claude Code tool call against your Actera policies, hold risky calls for approval, and record what happened",
   "homepage": "https://github.com/Actera-AI/actera-claude-code",
   "repository": "https://github.com/Actera-AI/actera-claude-code",
   "license": "Apache-2.0",
   "documentationUrl": "https://github.com/Actera-AI/actera-claude-code#readme",
   "supportUrl": "https://github.com/Actera-AI/actera-claude-code/issues",
+  "privacyPolicyUrl": "https://actera.dev/legal/privacy-policy",
+  "termsOfServiceUrl": "https://actera.dev/legal/terms-and-conditions",
   "keywords": [
     "actera",
     "policy",
