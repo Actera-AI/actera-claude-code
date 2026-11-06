@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.10
+
+Adds a README and icon inside the plugin folder, for the listing in Anthropic's directory. Behavior is unchanged.
+
 ## 0.0.9
 
 When a workspace reaches its monthly decisions, Claude Code says so once a day, `/actera:status`
