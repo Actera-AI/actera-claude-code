@@ -2,7 +2,12 @@
 
 ## 0.0.10
 
-Adds a README and icon inside the plugin folder, for the listing in Anthropic's directory. Behavior is unchanged.
+Prepares the plugin for Anthropic's directory, which refuses a mod that answers `allow` and skills
+that read options with allowed values. Adds a README and icon inside the plugin folder. The mod now
+reviews a held call from `tool.call` and runs the PreToolUse hook again, and the hook releases the
+call once Actera reports the approval. Approval still releases one call. `/actera:status` reads the
+mode and evaluation-failure choice that hooks saved. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.2.
 
 ## 0.0.9
 

@@ -163,7 +163,8 @@ export function register(on) {
   // repeats the command hook, which allows the call once Actera has approved it.
   on('tool.call', async ($, e, next) => {
     const result = await next(e)
-    const decisionId = result?.isError ? pendingDecision(result.text || '', e.tool) : undefined
+    const denial = result?.deny || (result?.isError && result.text)
+    const decisionId = denial ? pendingDecision(denial, e.tool) : undefined
     if (!decisionId) return result
     const reviewed = await resolvePending($, decisionId, e.tool, toolInput(e))
     if (reviewed?.decision === 'allow') return next(e)
