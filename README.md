@@ -68,6 +68,9 @@ hold the original call while the mod offers **Allow once** or **Deny**. The
 reviewer links an Actera account, and Actera checks their approval eligibility.
 Approval releases the held call once and preserves other native permission denials.
 
+This plugin governs the agent. To review activity or write policies from a conversation, add
+the separate [Actera connector for Claude](https://docs.actera.dev/integrations/claude/).
+
 Enforcing mode denies on evaluation errors by default. Monitoring continues and
 queues the request for later evaluation and reporting. A delayed evaluation uses
 the policies available when it reaches Actera; the original failure remains in

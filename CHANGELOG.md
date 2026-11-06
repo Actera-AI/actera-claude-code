@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.9
+
+When a workspace reaches its monthly decisions, Claude Code says so once a day, `/actera:status`
+shows why, and the plugin waits until Actera accepts requests again instead of retrying every
+30 seconds. Enforcing mode behaves as before, and a denied call now explains the limit. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.1.
+
 ## 0.0.8
 
 `/actera:disconnect` also ends the connection in Actera, so the agent shows as
