@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.0.10
+
+Prepares the plugin for Anthropic's directory, which refuses a mod that answers `allow` and skills
+that read options with allowed values. Adds a README and icon inside the plugin folder. The mod now
+reviews a held call from `tool.call` and runs the PreToolUse hook again, and the hook releases the
+call once Actera reports the approval. Approval still releases one call. `/actera:status` reads the
+mode and evaluation-failure choice that hooks saved. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.2.
+
+## 0.0.9
+
+When a workspace reaches its monthly decisions, Claude Code says so once a day, `/actera:status`
+shows why, and the plugin waits until Actera accepts requests again instead of retrying every
+30 seconds. Enforcing mode behaves as before, and a denied call now explains the limit. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.1.
+
+## 0.0.8
+
+`/actera:disconnect` also ends the connection in Actera, so the agent shows as
+disconnected and its key stops working. If Actera cannot be reached, local state is still
+removed and the command says to disconnect the agent in Actera. Vendors
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.4.0.
+
+## 0.0.7
+
+Vendors only the core and the Claude Code adapter of
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.3.3, taken from its
+published release. Behavior is unchanged: 0.3.3 only changed the Codex adapter.
+
+## 0.0.6
+
+Questions Claude asks with `AskUserQuestion`, including Actera's own review
+prompt, report their outcome again. Claude adds the answer to the tool input
+after the call is checked, so the report did not match the checked call and
+`/actera:status` showed a delivery error after every question. Uses
+[agent-hooks](https://github.com/Actera-AI/actera-agent-hooks) 0.3.2.
+
 ## 0.0.5
 
 The hook bridge, delivery worker, pairing and bundled scanner now come from the

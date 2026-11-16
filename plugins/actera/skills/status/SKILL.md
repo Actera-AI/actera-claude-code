@@ -4,7 +4,7 @@ description: Show the Actera connection, current mode, evaluation-failure behavi
 disable-model-invocation: true
 ---
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/bin/actera-hook.mjs" status --mode "${user_config.mode}" --evaluation-failure "${user_config.evaluation_failure}"`.
+Run `node "${CLAUDE_PLUGIN_ROOT}/bin/actera-hook.mjs" status`.
 
 Summarize whether Actera is connected, the current mode, and the evaluation-failure choice. In Monitoring, explain that tool calls always continue and the failure choice applies only in Enforcing. Report queued events and any delivery error without implying that pairing proves tool traffic has arrived. To change either setting, direct the user to Claude's `/config` panel. Do not edit the bridge configuration or Claude settings files.
 

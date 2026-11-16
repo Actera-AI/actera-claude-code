@@ -35,6 +35,10 @@ function markerPath(home) {
 function offlinePath(home) {
   return path.join(home, 'offline-until.json')
 }
+
+function limitNoticePath(home) {
+  return path.join(home, 'limit-notice.json')
+}
 function errorPath(home) {
   return path.join(home, 'last-error.json')
 }
@@ -162,7 +166,7 @@ async function archivePreviousConnection(home, previous, count) {
   const moved = []
   const names = [
     'queue', 'approvals', 'tool-calls', 'tool-outcomes', 'reviewer.json', 'registered.json',
-    'offline-until.json', 'last-error.json', 'last-delivery.json', 'last-maintenance.json',
+    'offline-until.json', 'limit-notice.json', 'last-error.json', 'last-delivery.json', 'last-maintenance.json',
   ]
   const restore = async () => {
     for (const name of moved.reverse()) await rename(path.join(archive, name), path.join(home, name))
@@ -335,6 +339,16 @@ export async function reviewerLinkStatus(config, home = bridgeHome(), timeoutMs 
 
 // An approved Decision releases exactly one held tool call. Returns false
 // when another call already used it.
+async function approvalClaimed(home, decisionId) {
+  if (await legacyApprovalClaimed(home, decisionId)) return true
+  try {
+    await readFile(approvalClaimPath(home, decisionId))
+    return true
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false
+    throw error
+  }
+}
 export async function claimApproval(home, decisionId) {
   if (await legacyApprovalClaimed(home, decisionId)) return false
   try {
@@ -365,10 +379,13 @@ export async function decisionStatus(config, decisionId, timeoutMs = 5000) {
 }
 
 const alreadyReleased = () => new Error('This approved Decision already released another tool call')
+// Without a claim, the caller leaves it to the held call's next hook run.
+const usableApproval = async (home, decisionId, claim) =>
+  claim ? claimApproval(home, decisionId) : !(await approvalClaimed(home, decisionId))
 
 // The linked person approves or rejects a held Decision from the agent host.
 // Actera checks that they may review it; an approval is claimed for this call.
-export async function reviewDecision(config, decisionId, choice, { home = bridgeHome(), idempotencyPrefix, rejectReason, timeoutMs = 8000 }) {
+export async function reviewDecision(config, decisionId, choice, { home = bridgeHome(), idempotencyPrefix, rejectReason, timeoutMs = 8000, claim = true }) {
   if (!/^[0-9a-f-]{36}$/i.test(decisionId) || !['approve', 'reject'].includes(choice))
     throw new Error('Invalid Decision or review choice')
   let decision = await decisionStatus(config, decisionId, timeoutMs)
@@ -397,16 +414,16 @@ export async function reviewDecision(config, decisionId, choice, { home = bridge
     decision.status !== (choice === 'approve' ? 'APPROVED' : 'REJECTED')
   )
     throw new Error('Actera returned an unexpected review result')
-  if (choice === 'approve' && !(await claimApproval(home, decisionId))) throw alreadyReleased()
+  if (choice === 'approve' && !(await usableApproval(home, decisionId, claim))) throw alreadyReleased()
   return { id: decision.id, status: decision.status }
 }
 
 // A reviewer can resolve a held call in Actera while the host's prompt is
 // open. An approval found here is claimed for this call.
-export async function reviewedElsewhere(config, decisionId, home = bridgeHome(), timeoutMs = 5000) {
+export async function reviewedElsewhere(config, decisionId, home = bridgeHome(), timeoutMs = 5000, { claim = true } = {}) {
   if (!/^[0-9a-f-]{36}$/i.test(decisionId)) throw new Error('Invalid Decision')
   const decision = await decisionStatus(config, decisionId, timeoutMs)
-  if (decision.status === 'APPROVED' && !(await claimApproval(home, decisionId))) throw alreadyReleased()
+  if (decision.status === 'APPROVED' && !(await usableApproval(home, decisionId, claim))) throw alreadyReleased()
   return { id: decision.id, status: decision.status, ...(decision.reason ? { reason: decision.reason } : {}) }
 }
 
@@ -495,8 +512,34 @@ async function postActera(config, endpoint, body, timeoutMs) {
     redirect: 'error',
     signal: AbortSignal.timeout(timeoutMs),
   })
+  if (response.status === 429) throw await limitError(endpoint, response)
   if (!response.ok) throw new Error(`Actera ${endpoint} returned HTTP ${response.status}`)
   return response.json()
+}
+
+// Actera reports a monthly limit with the time left in the month. Retrying
+// sooner is refused, and the wait is capped so a plan change is noticed.
+const MAX_RETRY_WAIT_MS = 60 * 60 * 1000
+
+async function limitError(endpoint, response) {
+  const body = await response.json().catch(() => undefined)
+  const monthly = body?.message === 'evaluation_monthly_limit_exceeded'
+  const error = new Error(monthly
+    ? 'This Actera workspace has used its monthly decisions. New activity is not recorded until the limit resets or the plan changes; see Plan & usage in Actera.'
+    : `Actera ${endpoint} returned HTTP 429`)
+  error.monthlyLimit = monthly
+  const seconds = Number(response.headers.get('retry-after'))
+  if (seconds > 0) error.retryAfterMs = Math.min(seconds * 1000, MAX_RETRY_WAIT_MS)
+  return error
+}
+
+// Tells the person about a monthly limit once a day rather than on every tool call.
+export async function limitNotice(error, home = bridgeHome()) {
+  if (!error?.monthlyLimit) return undefined
+  const last = await readJson(limitNoticePath(home))
+  if (last?.at > Date.now() - 24 * 60 * 60 * 1000) return undefined
+  await writeJsonAtomic(limitNoticePath(home), { at: Date.now() })
+  return error.message
 }
 
 export async function deliverBatch(config, { home = bridgeHome(), limit = Infinity, timeoutMs = 1500, force = false } = {}) {
@@ -565,7 +608,7 @@ export async function deliverBatch(config, { home = bridgeHome(), limit = Infini
     await rm(offlinePath(home), { force: true })
   } catch (error) {
     if (!force) await writeJsonAtomic(offlinePath(home), { until: Date.now() + 10_000 })
-    return { sent, pending: (await queueFiles(home)).length, error: error.message }
+    return { sent, pending: (await queueFiles(home)).length, error: error.message, retryAfterMs: error.retryAfterMs }
   }
   return { sent, pending: (await queueFiles(home)).length }
 }
@@ -588,12 +631,32 @@ export async function disconnect(home = bridgeHome(), { discard = false } = {}) 
     if (result.pending)
       throw new Error(`${result.pending} report(s) could not be delivered${result.error ? ` (${result.error})` : ''}. Run disconnect --discard to delete them.`)
   }
+  const revoke = config ? await revokeConnection(config) : undefined
   await stopDelivery(home)
   // Only a scanner that was extracted here can be running.
   const scanner = path.join(home, 'scanner')
   if (await stat(scanner).catch(() => undefined)) await stopScanner(scanner)
   await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-  return { disconnected: !!config, home }
+  return { disconnected: !!config, home, ...revoke }
+}
+
+// Ends this connection in Actera too, so it stops showing as connected. A 401
+// means the key no longer works, which is already the result we want. Local
+// state is removed either way; the person can still disconnect in Actera.
+export async function revokeConnection(config, timeoutMs = 5000) {
+  try {
+    const response = await fetch(`${config.baseUrl}/v1/connection/disconnect`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${config.apiKey}` },
+      body: '{}',
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (response.ok || response.status === 401) return { revoked: true }
+    return { revoked: false, revokeError: `Actera returned HTTP ${response.status}. Disconnect the agent in Actera.` }
+  } catch (error) {
+    return { revoked: false, revokeError: `Could not reach Actera (${error.message}). Disconnect the agent in Actera.` }
+  }
 }
 
 // Hooks only hand off to the worker; commands that report on delivery wait for it.

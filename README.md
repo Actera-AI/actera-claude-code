@@ -51,8 +51,8 @@ Configure policies on the agent page. Open Claude's `/config` panel, or run
 Claude stores both choices in its user settings. Reconnecting does not reset them,
 report backlogs do not prevent changing them, and agent configuration never changes
 plugin mode. Use `/actera:status` to see the effective settings and delivery status.
-Run `/actera:disconnect` before uninstalling to deliver queued reports and remove
-local state; see [operations](docs/operations.md#credential-rotation).
+Run `/actera:disconnect` before uninstalling to deliver queued reports, end the
+connection in Actera, and remove local state; see [operations](docs/operations.md#credential-rotation).
 After changing settings, use `/reload-plugins` or start a new session before relying
 on the new behavior.
 
@@ -67,6 +67,9 @@ Claude's native permission flow; blocked calls are denied. Pending approvals
 hold the original call while the mod offers **Allow once** or **Deny**. The
 reviewer links an Actera account, and Actera checks their approval eligibility.
 Approval releases the held call once and preserves other native permission denials.
+
+This plugin governs the agent. To review activity or write policies from a conversation, add
+the separate [Actera connector for Claude](https://docs.actera.dev/integrations/claude/).
 
 Enforcing mode denies on evaluation errors by default. Monitoring continues and
 queues the request for later evaluation and reporting. A delayed evaluation uses
@@ -102,7 +105,9 @@ with capture status and redacted JSON pointer paths, reasons, and detector rule 
 Each decision request sends the tool name, the redacted tool input (or only its
 field names in `metadata` mode), the MCP server key and name for MCP tools, and
 Claude's session, prompt, subagent, and tool-use identifiers, working directory,
-and permission mode. Execution reports repeat the same action and context.
+and permission mode. Policies read these under `context`, for example
+`context.claude.permission_mode` or `context.claude.cwd`. Execution reports repeat
+the same action and context.
 Prompt text, model output, and tool results are never sent.
 
 The scanner is bundled for Windows, macOS, and Linux (x64 and ARM64), verified

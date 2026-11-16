@@ -63,7 +63,7 @@ allows a call. Repeat in Claude Desktop before claiming Desktop support for a
 release. CI fixtures and `claude plugin test` do not exercise that full host and
 service path. Record hook latency for a normal session and a tool-heavy session;
 the plugin runs command hooks for `PreToolUse`, `PostToolUse` and
-`PostToolUseFailure`, plus native `classic.PreToolUse` and `tool.check` mod hooks.
+`PostToolUseFailure`, plus a native `tool.call` mod hook.
 
 Local hooks can be disabled or fail to start. Actera's decision is advisory in
 that case; mandatory enforcement belongs at an application-owned gateway.

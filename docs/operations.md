@@ -89,7 +89,7 @@ Hook startup failures and host-enforced timeouts remain subject to Claude's beha
 Hooks persist reports durably and hand delivery to one local worker process per
 bridge directory (see [Execution report delivery](#execution-report-delivery)).
 A failed delivery backs off before retrying; `flush` retries immediately.
-The queue holds up to 256 reports. When full, recording fails visibly in status; policy checks still run. Flush the queue to restore reporting. A persistent backlog
+The queue holds up to 128 reports. When full, recording fails visibly in status; policy checks still run. Flush the queue to restore reporting. A persistent backlog
 appears in `status`; ordinary lifecycle hooks do not repeatedly print the same
 queue-full error in Claude. A full queue does not bypass policy checks. In enforcing mode, handled evaluation errors deny by default. Monitoring does not emit permission denials.
 
@@ -118,14 +118,16 @@ To remove the plugin, run `/actera:disconnect` in Claude first, then uninstall:
 claude plugin uninstall actera@actera --scope user
 ```
 
-Disconnect delivers queued reports, stops the delivery worker and scanner
-helper, and deletes `~/.actera/claude-code`, including the machine key, reviewer
-link and archives. It stops without deleting anything if reports cannot be
-delivered; `/actera:disconnect --discard` deletes them instead. Uninstalling
-without disconnecting leaves local state in place, and the worker exits within
-five minutes. Neither disconnecting nor uninstalling revokes the agent key;
-disable it in Actera when retiring the plugin. `claude plugin disable
-actera@actera` keeps both the plugin and its local state.
+Disconnect delivers queued reports, ends the connection in Actera so the key
+stops working, stops the delivery worker and scanner helper, and deletes
+`~/.actera/claude-code`, including the machine key, reviewer link and archives.
+It stops without deleting anything if reports cannot be delivered;
+`/actera:disconnect --discard` deletes them instead. If Actera cannot be reached,
+local state is still removed; disconnect the agent on its page in Actera.
+Uninstalling without disconnecting leaves local state in place and the connection
+active in Actera, and the worker exits within five minutes. The agent's connection
+card shows when its key was last used. `claude plugin disable actera@actera` keeps
+both the plugin and its local state.
 
 ## Plugin mode
 

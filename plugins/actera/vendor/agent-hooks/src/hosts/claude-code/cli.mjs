@@ -2,7 +2,7 @@
 import { stopDelivery } from '../../core/delivery.mjs'
 import { spawn } from 'node:child_process'
 import { stopScanner } from '../../core/scanner-client.mjs'
-import { SettingsError } from './settings.mjs'
+import { saveSettings, SettingsError } from './settings.mjs'
 import {
   agentReadiness,
   activityForHook,
@@ -10,6 +10,7 @@ import {
   claudeToolDecision,
   configure,
   decisionReview,
+  limitNotice,
   disconnect,
   enqueueDecision,
   enqueueToolOutcome,
@@ -178,6 +179,7 @@ async function main() {
   }
   if (command === 'hook') {
     const hook = await readHookInput(process.stdin)
+    await saveSettings(bridgeHome()).catch(error => recordEvaluationError(error).catch(() => {}))
     if (!config) {
       return
     }
@@ -213,6 +215,8 @@ async function main() {
       } catch (error) {
         await recordEvaluationError(error).catch(() => {})
       }
+      const notice = await limitNotice(evaluationError).catch(() => undefined)
+      if (notice) output = { ...output, systemMessage: notice }
       if (output) process.stdout.write(JSON.stringify(output) + '\n')
       return
     }
