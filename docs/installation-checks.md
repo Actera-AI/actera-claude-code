@@ -41,7 +41,7 @@ node scripts/check-plugin.mjs --installed
 ```
 
 CI tests a local install on Linux, macOS, and Windows. Its remote-install job
-tests the pushed branch or tag against a fresh Claude configuration. The checker
+tests `main` after each push, or the branch of a manual run, against a fresh Claude configuration. The checker
 compares every installed runtime/license file and all six scanner
 checksums with the checkout, rejecting extra files or a stale version. The
 release workflow verifies an archive of the tag and attaches it to the GitHub
@@ -50,8 +50,8 @@ release. A release tag is immutable; publish a new version for a correction.
 The marketplace follows `main`, so merging a manifest version makes it available
 independently of GitHub Releases. Bump the manifest and changelog together and
 require the branch CI checks before merging. Verify the pushed installation,
-then tag that exact commit `v<version>`. The release workflow runs all checks again
-before creating a source archive. A failed or unstarted CI run is not validation.
+then tag that exact commit `v<version>`. The release workflow reuses that CI result
+instead of running the tests again, then verifies and archives the tag. A failed or unstarted CI run is not validation.
 
 ## Host acceptance
 

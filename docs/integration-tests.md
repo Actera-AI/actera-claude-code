@@ -1,8 +1,9 @@
 # Testing the plugin
 
 Install dependencies with `npm ci`, then run `npm test`. The offline suite checks
-pairing, decision handling, execution reporting, scanner redaction, retries,
-delivery recovery, and distribution integrity against controlled HTTP fixtures.
+pairing against controlled HTTP fixtures, plugin hook and settings files,
+installation validation, and the vendored agent-hooks copy. Decision handling,
+redaction, retries and delivery recovery are tested in agent-hooks.
 
 `npm run test:native-settings` additionally exercises the real Claude host with
 isolated settings and local HTTP fixtures. It needs Claude authentication and

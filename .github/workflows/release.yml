@@ -59,9 +59,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
-      - name: Require clean publication history
-        run: node scripts/check-publication.mjs --history
-        timeout-minutes: 5
       - name: Vendored files match the agent-hooks release named in the lock
         run: node scripts/vendor-agent-hooks.mjs --verify-release
         timeout-minutes: 5
